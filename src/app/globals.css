@@ -1,0 +1,650 @@
+@import "tailwindcss";
+
+/*
+  Brand tokens sampled from public/brand/kubhai-logo.jpg
+  Navy aggregate #01244F / darkest #00163E
+  Accent aggregate #FCAD12 / deep #EF8D12 / bright #FFE607
+*/
+:root {
+  --kh-navy-950: #00163e;
+  --kh-navy-900: #001840;
+  --kh-navy-800: #01244f;
+  --kh-navy-700: #002a5d;
+  --kh-navy-600: #00326c;
+  --kh-navy-500: #003b7d;
+  --kh-navy-400: #004888;
+  --kh-accent: #fcad12;
+  --kh-accent-deep: #ef8d12;
+  --kh-accent-bright: #ffe607;
+  --kh-white: #ffffff;
+  --kh-paper: #fafafb;
+  --kh-ink: #0f1724;
+  --kh-muted: #5b6573;
+  --kh-line: #e6e8ec;
+  --kh-danger: #c23b2e;
+  --kh-success: #1f7a4d;
+  --store-primary: #1a3c34;
+  --store-primary-soft: #e7efea;
+  --store-accent: #c4a35a;
+  --store-paper: #f7f3ea;
+  --background: var(--kh-paper);
+  --foreground: var(--kh-ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-navy-950: var(--kh-navy-950);
+  --color-navy-900: var(--kh-navy-900);
+  --color-navy-800: var(--kh-navy-800);
+  --color-navy-700: var(--kh-navy-700);
+  --color-navy-600: var(--kh-navy-600);
+  --color-navy-500: var(--kh-navy-500);
+  --color-navy-400: var(--kh-navy-400);
+  --color-accent: var(--kh-accent);
+  --color-accent-deep: var(--kh-accent-deep);
+  --color-accent-bright: var(--kh-accent-bright);
+  --color-paper: var(--kh-paper);
+  --color-ink: var(--kh-ink);
+  --color-muted: var(--kh-muted);
+  --color-line: var(--kh-line);
+  --color-danger: var(--kh-danger);
+  --color-success: var(--kh-success);
+  --color-store: var(--store-primary);
+  --color-store-soft: var(--store-primary-soft);
+  --color-store-accent: var(--store-accent);
+  --color-store-paper: var(--store-paper);
+  --font-sans: var(--font-thai);
+}
+
+html,
+body {
+  background: var(--kh-paper);
+  color: var(--kh-ink);
+}
+
+body {
+  font-family: var(--font-thai), sans-serif;
+}
+
+::selection {
+  background: var(--kh-accent);
+  color: var(--kh-navy-950);
+}
+
+@keyframes kh-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kh-landing .scrollbar-none {
+  scrollbar-width: none;
+}
+.kh-landing .scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes kh-drawer {
+  from {
+    transform: translateX(16px);
+    opacity: 0.72;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.kh-drawer {
+  animation: kh-drawer 180ms ease-out;
+}
+
+.input {
+  width: 100%;
+  height: 3.25rem;
+  border-radius: 1rem;
+  background: #f4f1ea;
+  padding: 0 0.9rem;
+  outline: none;
+}
+
+.wizard-input {
+  width: 100%;
+  height: 3rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--store-line, #e8e2d8) 80%, transparent);
+  background: #fff;
+  padding: 0 0.9rem;
+  color: var(--store-ink, #0f1724);
+  outline: none;
+}
+
+.wizard-input:focus {
+  border-color: var(--store-accent, #c4a35a);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--store-accent, #c4a35a) 22%, transparent);
+}
+
+textarea.wizard-input {
+  height: auto;
+  resize: vertical;
+}
+
+.admin-input {
+  width: 100%;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--kh-line);
+  background: #fff;
+  padding: 0 0.85rem;
+  outline: none;
+}
+
+.admin-input:focus {
+  border-color: var(--kh-navy-500);
+}
+
+/* —— Premium booking shell (mobile-first) —— */
+.booking-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.booking-shell-bg {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--store-primary) 28%, transparent), transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, var(--store-primary) 12%, var(--store-paper)) 0%, var(--store-paper) 42%, #fff 100%);
+}
+
+.booking-atm-trip .booking-shell-bg {
+  background:
+    radial-gradient(90% 60% at 80% 0%, color-mix(in srgb, var(--store-accent) 18%, transparent), transparent 50%),
+    linear-gradient(180deg, color-mix(in srgb, var(--store-primary) 22%, #1a2e2e) 0%, var(--store-paper) 48%, #fffdf8 100%);
+}
+
+.booking-atm-fleet .booking-shell-bg {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--store-primary) 14%, var(--store-paper)) 0%, #fff 55%);
+}
+
+.booking-atm-calm .booking-shell-bg {
+  background: linear-gradient(180deg, var(--store-paper) 0%, #fff 60%);
+}
+
+.booking-atm-review .booking-shell-bg {
+  background:
+    radial-gradient(70% 50% at 20% 0%, color-mix(in srgb, var(--store-accent) 12%, transparent), transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, var(--store-primary) 10%, var(--store-paper)) 0%, #fff 60%);
+}
+
+.booking-hero-tall {
+  min-height: clamp(190px, 52vw, 240px);
+}
+
+.booking-hero-short {
+  min-height: 112px;
+}
+
+.booking-hero-compact {
+  min-height: clamp(132px, 36vw, 168px);
+}
+
+.booking-hero-photo {
+  object-fit: cover;
+  object-position: var(--booking-hero-pos-d, 50% 40%);
+  opacity: 0.72;
+}
+
+@media (max-width: 767px) {
+  .booking-hero-photo {
+    object-position: var(--booking-hero-pos-m, 50% 35%);
+    opacity: 0.68;
+  }
+}
+
+@media (min-width: 1280px) {
+  .booking-hero-compact {
+    min-height: clamp(168px, 22vw, 220px);
+  }
+  .booking-hero-photo {
+    opacity: 0.78;
+  }
+}
+
+.booking-hero-overlay {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--store-primary) 72%, #000) 0%, color-mix(in srgb, var(--store-primary) 55%, transparent) 45%, color-mix(in srgb, var(--store-primary) 88%, #000) 100%);
+}
+
+@keyframes booking-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.booking-card-enter {
+  animation: booking-card-in 0.28s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .booking-card-enter {
+    animation: none;
+  }
+}
+
+.booking-service-card-lg {
+  display: flex;
+  min-height: 4.25rem;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 1.1rem;
+  background: #fff;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  box-shadow: 0 1px 2px rgb(15 23 36 / 0.04);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.booking-service-icon {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+}
+
+.booking-service-icon svg {
+  height: 1.25rem;
+  width: 1.25rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.booking-service-card-lg[data-active="true"] {
+  background: var(--store-primary, #0f3d3e);
+  color: #fff;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--store-primary, #0f3d3e) 28%, transparent);
+}
+
+.booking-route-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.booking-route-rail::before {
+  content: "";
+  position: absolute;
+  left: 1.15rem;
+  top: 1.75rem;
+  bottom: 1.75rem;
+  width: 2px;
+  background: color-mix(in srgb, var(--store-primary, #0f3d3e) 22%, transparent);
+}
+
+/* Equal geometry for storefront hero header actions (help / login / account) */
+.booking-header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.booking-header-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 5.5rem; /* 88px — fits ช่วยเหลือ / เข้าสู่ระบบ / การจองของฉัน */
+  height: 2.75rem; /* 44px */
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0;
+  font-size: 0.6875rem; /* 11px — fits Thai labels in fixed width */
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.booking-header-action--secondary {
+  background: rgb(255 255 255 / 0.15);
+  color: #fff;
+}
+
+.booking-header-action--primary {
+  background: rgb(255 255 255 / 0.28);
+  color: #fff;
+  font-weight: 600;
+}
+
+.booking-progress-pill {
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 92%, var(--store-paper));
+  box-shadow: 0 8px 28px rgba(15, 23, 36, 0.08);
+  border: 1px solid color-mix(in srgb, var(--store-primary) 8%, #fff);
+}
+
+.booking-sheet {
+  border-radius: 1.85rem 1.85rem 0 0;
+  background: color-mix(in srgb, var(--store-paper) 70%, #fff);
+  box-shadow: 0 -12px 40px rgba(15, 23, 36, 0.08);
+  min-height: 60dvh;
+}
+
+.booking-summary-card {
+  border-radius: 1.5rem;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--store-primary) 8%, #fff);
+  box-shadow: 0 10px 30px rgba(15, 23, 36, 0.06);
+}
+
+.booking-sticky-cta {
+  background: color-mix(in srgb, #fff 88%, var(--store-paper));
+  border-top: 1px solid color-mix(in srgb, var(--store-primary) 10%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.booking-cta-gold {
+  display: flex;
+  height: 3.15rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: var(--store-accent, #c4a35a);
+  color: #1a1510;
+  font-size: 0.95rem;
+  font-weight: 650;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--store-accent) 35%, transparent);
+}
+
+.booking-cta-gold:disabled {
+  opacity: 0.6;
+}
+
+.booking-cta-primary {
+  display: flex;
+  height: 3.15rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: var(--store-primary);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.booking-service-card {
+  border-radius: 1.15rem;
+  padding: 0.85rem 0.75rem;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--store-primary) 8%, #fff);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 36, 0.04);
+  min-height: 5.25rem;
+}
+
+.booking-service-card[data-active="true"] {
+  background: var(--store-primary);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--store-primary) 28%, transparent);
+}
+
+.booking-datetime-card {
+  position: relative;
+  border-radius: 1.15rem;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--store-primary) 8%, #fff);
+  padding: 0.7rem 0.85rem;
+  box-shadow: 0 2px 8px rgba(15, 23, 36, 0.04);
+}
+
+.booking-datetime-card input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.booking-loc-card {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  border-radius: 1.15rem;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--store-primary) 8%, #fff);
+  padding: 0.9rem 1rem;
+  box-shadow: 0 2px 8px rgba(15, 23, 36, 0.04);
+  width: 100%;
+  text-align: left;
+}
+
+.booking-stepper-card {
+  border-radius: 1.15rem;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--store-primary) 8%, #fff);
+  padding: 0.75rem 0.85rem;
+  box-shadow: 0 2px 8px rgba(15, 23, 36, 0.04);
+}
+
+.booking-vehicle-card {
+  overflow: hidden;
+  border-radius: 1.35rem;
+  background: #fff;
+  border: 1.5px solid transparent;
+  box-shadow: 0 6px 20px rgba(15, 23, 36, 0.06);
+  text-align: left;
+}
+
+.booking-vehicle-card[data-selected="true"] {
+  border-color: var(--store-primary);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--store-primary) 18%, transparent);
+}
+
+.booking-trust-banner {
+  border-radius: 1.15rem;
+  background: var(--store-primary);
+  color: #fff;
+  padding: 1rem 1.1rem;
+}
+
+.booking-review-card {
+  border-radius: 1.35rem;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--store-primary) 8%, #fff);
+  padding: 1rem 1.05rem;
+  box-shadow: 0 4px 16px rgba(15, 23, 36, 0.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .booking-cta-gold,
+  .booking-service-card,
+  .booking-vehicle-card {
+    transition: none;
+  }
+}
+
+/* Premium micro-interactions — subtle, fast, reduced-motion safe */
+.ui-press {
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.12s ease;
+  transform: translateY(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-press:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgb(15 23 36 / 0.08);
+  }
+}
+
+.ui-press:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+  box-shadow: 0 1px 4px rgb(15 23 36 / 0.06);
+}
+
+.ui-press:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--store-accent, #c4a35a) 70%, #0f3d3e);
+  outline-offset: 2px;
+}
+
+.ui-card {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-card:hover {
+    border-color: color-mix(in srgb, var(--store-primary, #0f3d3e) 22%, #e5e7eb);
+    box-shadow: 0 6px 18px rgb(15 23 36 / 0.06);
+  }
+}
+
+.booking-service-card-lg,
+.booking-vehicle-card,
+.booking-cta-gold,
+button.rounded-xl,
+a.rounded-xl {
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.12s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .booking-service-card-lg:hover:not([data-active="true"]),
+  .booking-vehicle-card:hover:not([data-selected="true"]) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgb(15 23 36 / 0.07);
+  }
+
+  .booking-cta-gold:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+}
+
+.booking-service-card-lg:active,
+.booking-vehicle-card:active,
+.booking-cta-gold:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-press,
+  .ui-card,
+  .booking-service-card-lg,
+  .booking-vehicle-card,
+  .booking-cta-gold,
+  button.rounded-xl,
+  a.rounded-xl {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* —— Customer experience theme tokens (Partner storefront) —— */
+.customer-cx,
+.customer-theme-tokens {
+  --cx-bg: var(--store-paper, #f7f3ea);
+  --cx-surface: #ffffff;
+  --cx-surfaceElevated: #ffffff;
+  --cx-textPrimary: var(--store-ink, #0f1724);
+  --cx-textSecondary: #5b6573;
+  --cx-border: color-mix(in srgb, var(--store-primary, #0f3d3e) 12%, #e5e7eb);
+  --cx-input: #ffffff;
+  --cx-chip: #ffffff;
+  --cx-brandFg: var(--store-primary, #0f3d3e);
+  --cx-link: var(--cx-brandFg);
+  --cx-overlay: rgb(15 23 36 / 0.4);
+  /* Accent surfaces stay light in both modes, so ink on them stays dark. */
+  --cx-onAccent: #1a1510;
+}
+
+.customer-theme-tokens {
+  background: var(--cx-bg);
+  color: var(--cx-textPrimary);
+}
+
+.customer-cx .text-muted,
+.customer-theme-tokens .text-muted {
+  color: var(--cx-textSecondary);
+}
+
+.customer-theme-tokens .bg-white {
+  background-color: var(--cx-surface);
+}
+
+/* Body ink follows the mode. Accent CTAs must use .cx-accent-cta instead, or
+   dark mode would put near-white text on a light gold button. */
+.customer-theme-tokens .text-navy-800 {
+  color: var(--cx-textPrimary);
+}
+
+.cx-accent-cta {
+  background-color: var(--store-accent, #c4a35a);
+  color: var(--cx-onAccent, #1a1510);
+}
+
+.customer-theme-tokens .border-line,
+.customer-theme-tokens .ring-black\/5,
+.customer-theme-tokens .ring-black\/8 {
+  border-color: var(--cx-border);
+  --tw-ring-color: var(--cx-border);
+}
+
+.customer-theme-tokens input,
+.customer-theme-tokens textarea,
+.customer-theme-tokens select {
+  background-color: var(--cx-input);
+  color: var(--cx-textPrimary);
+  border-color: var(--cx-border);
+}
+
+/* Dark palette is applied by CustomerThemeTokenLayer; keep hook for color-scheme. */
+html.customer-dark .customer-cx,
+html[data-customer-theme="dark"] .customer-cx {
+  color-scheme: dark;
+}
+
+
+

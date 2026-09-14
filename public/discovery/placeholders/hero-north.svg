@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="เที่ยวเหนือ">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#071422"/>
+      <stop offset="55%" stop-color="#0c3550"/>
+      <stop offset="100%" stop-color="#163a2f"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fcad12" stop-opacity="0.35"/>
+      <stop offset="60%" stop-color="#fcad12" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+  <path d="M0 620 L220 480 L380 560 L560 400 L740 520 L960 360 L1180 500 L1400 420 L1600 540 L1600 900 L0 900 Z" fill="#0a2436" opacity="0.95"/>
+  <path d="M0 700 L180 590 L340 650 L520 540 L700 630 L900 500 L1120 610 L1340 540 L1600 650 L1600 900 L0 900 Z" fill="#0f3348"/>
+  <circle cx="1280" cy="180" r="70" fill="#fcad12" opacity="0.55"/>
+  <circle cx="1280" cy="180" r="38" fill="#ffe08a" opacity="0.75"/>
+  <ellipse cx="420" cy="760" rx="260" ry="40" fill="#fcad12" opacity="0.12"/>
+  <text x="80" y="820" fill="#ffffff" fill-opacity="0.55" font-family="system-ui,sans-serif" font-size="36" font-weight="600">เที่ยวเหนือ</text>
+</svg>
