@@ -15,11 +15,7 @@ import { resolveBusinessBranding } from "@/lib/domain/branding";
 import { operationalBookings } from "@/lib/domain/fixtures";
 import { deriveNotifications, bookingWorkloadBadgeCount, notificationBadgeCounts } from "@/lib/domain/ops";
 
-export default async function StoreLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function StoreLayout({ children }: { children: React.ReactNode }) {
   const pathname = (await headers()).get("x-kubhai-pathname") ?? "";
   const isLogin = pathname === "/store/login" || pathname.startsWith("/store/login/");
 
@@ -68,7 +64,11 @@ export default async function StoreLayout({
     : ["/store/trip-packages"];
 
   return (
-    <StoreBrandScope brand={brand} className="min-h-dvh min-w-0 overflow-x-hidden bg-paper">
+    <StoreBrandScope
+      brand={brand}
+      className="store-admin-shell notranslate min-h-dvh min-w-0 overflow-x-hidden bg-paper"
+      translate="no"
+    >
       <aside
         className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line print:hidden lg:flex"
         style={{ background: brand.primaryColor, color: "#fff" }}
@@ -80,7 +80,7 @@ export default async function StoreLayout({
             <p className="text-[11px] text-white/70">ระบบงานร้าน</p>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto text-white [&_a]:text-white/85 [&_a[aria-current=page]]:bg-white/15 [&_a[aria-current=page]]:text-white">
+        <div className="min-h-0 flex-1 overflow-y-auto text-white [&_a]:text-white/85 [&_a[aria-current=page]]:bg-white/15 [&_a[aria-current=page]]:text-white">
           <StoreNavLinks storeSlug={ctx.business.slug} badges={badges} hiddenHrefs={hiddenNavHrefs} />
         </div>
         <div className="border-t border-white/15 px-4 py-4 text-xs text-white/70">
@@ -106,7 +106,7 @@ export default async function StoreLayout({
           </div>
         </header>
         <main className="min-w-0 overflow-x-hidden px-3 py-5 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-6 lg:overflow-visible lg:px-8 lg:pb-8 print:p-0">
-          {children}
+          <div className="mx-auto min-w-0 max-w-[1600px]">{children}</div>
         </main>
       </div>
       <div className="print:hidden"><StoreMobileNav badges={badges} /></div>
