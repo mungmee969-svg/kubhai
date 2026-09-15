@@ -43,14 +43,44 @@ export function StoreNavLinks({ onNavigate, storeSlug, badges, hiddenHrefs }: {
   const settingsItem = visible.find((item) => item.href === "/store/settings");
 
   return (
-    <nav className="min-w-0 flex-1 space-y-1 px-3">
+    <nav className="w-full min-w-0 space-y-1 px-3 text-navy-800">
       {mainItems.map((item) => {
         const active = isActive(pathname, item.href, "exact" in item && item.exact);
         const count = badgeForHref(item.href, badges);
-        return <Link key={item.href} href={item.href} onClick={onNavigate} className={`flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-sm ${active ? "bg-[color:var(--store-accent,#C4A35A)]/25 font-semibold text-inherit" : "text-inherit opacity-90 hover:bg-black/5"}`} aria-current={active ? "page" : undefined}><span className="min-w-0 flex-1 truncate">{item.label}</span><Badge count={count} /></Link>;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className={`flex w-full min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-sm ${active ? "bg-accent/20 font-semibold text-navy-800" : "text-navy-800 hover:bg-paper"}`}
+            aria-current={active ? "page" : undefined}
+          >
+            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            <Badge count={count} />
+          </Link>
+        );
       })}
-      {storefrontHref ? <a href={storefrontHref} target="_blank" rel="noopener noreferrer" onClick={onNavigate} className="block truncate rounded-xl px-3 py-2.5 text-sm text-inherit opacity-90 hover:bg-black/5">↗ หน้าร้านของฉัน</a> : null}
-      {settingsItem ? <Link href={settingsItem.href} onClick={onNavigate} className={`block truncate rounded-xl px-3 py-2.5 text-sm ${isActive(pathname, settingsItem.href) ? "bg-[color:var(--store-accent,#C4A35A)]/25 font-semibold text-inherit" : "text-inherit opacity-90 hover:bg-black/5"}`} aria-current={isActive(pathname, settingsItem.href) ? "page" : undefined}>{settingsItem.label}</Link> : null}
+      {storefrontHref ? (
+        <a
+          href={storefrontHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={onNavigate}
+          className="block w-full truncate rounded-xl px-3 py-2.5 text-sm text-navy-800 hover:bg-paper"
+        >
+          ↗ หน้าร้านของฉัน
+        </a>
+      ) : null}
+      {settingsItem ? (
+        <Link
+          href={settingsItem.href}
+          onClick={onNavigate}
+          className={`block w-full truncate rounded-xl px-3 py-2.5 text-sm ${isActive(pathname, settingsItem.href) ? "bg-accent/20 font-semibold text-navy-800" : "text-navy-800 hover:bg-paper"}`}
+          aria-current={isActive(pathname, settingsItem.href) ? "page" : undefined}
+        >
+          {settingsItem.label}
+        </Link>
+      ) : null}
     </nav>
   );
 }
