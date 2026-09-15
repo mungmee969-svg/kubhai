@@ -66,7 +66,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
   return (
     <StoreBrandScope
       brand={brand}
-      className="store-admin-shell notranslate min-h-dvh min-w-0 overflow-x-hidden bg-paper"
+      className="store-admin-shell notranslate min-h-dvh min-w-0 bg-paper lg:overflow-x-hidden"
       translate="no"
     >
       <aside
@@ -93,8 +93,8 @@ export default async function StoreLayout({ children }: { children: React.ReactN
       </aside>
 
       <div className="min-w-0 lg:pl-64">
-        <header className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur print:hidden">
-          <div className="flex min-w-0 items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4">
+        <header className="sticky top-0 z-40 overflow-visible border-b border-line bg-white print:hidden lg:z-20 lg:bg-white/95 lg:backdrop-blur">
+          <div className="flex min-w-0 items-center gap-2 overflow-visible px-3 py-3 sm:gap-3 sm:px-4">
             <StoreDrawer businessName={brand.businessName} storeSlug={ctx.business.slug} badges={badges} hiddenHrefs={hiddenNavHrefs} />
             <div className="min-w-0 flex-1 sm:flex-none">
               <p className="truncate text-sm font-semibold text-navy-800">{brand.businessName}</p>
