@@ -53,7 +53,7 @@ export function StoreDrawer({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative shrink-0 lg:hidden">
+    <div ref={rootRef} className="shrink-0 lg:hidden">
       <button
         type="button"
         className="h-10 rounded-xl border border-line bg-white px-3 text-sm text-navy-800"
@@ -69,7 +69,7 @@ export function StoreDrawer({
           id="store-mobile-menu"
           role="dialog"
           aria-label="เมนูร้าน"
-          className="absolute left-0 top-[calc(100%+0.75rem)] z-[100] w-[min(84vw,320px)] overflow-hidden rounded-2xl border border-line bg-white shadow-2xl"
+          className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.75rem)] z-[9999] max-h-[calc(100dvh-env(safe-area-inset-top)-7rem)] overflow-hidden rounded-2xl border border-line bg-white shadow-2xl lg:hidden"
           style={{ color: "#01244f" }}
         >
           <div className="flex items-center justify-between gap-3 border-b border-line bg-white px-4 py-3">
@@ -84,7 +84,7 @@ export function StoreDrawer({
             </button>
           </div>
 
-          <nav className="max-h-[min(68vh,560px)] overflow-y-auto overscroll-contain bg-white p-2">
+          <nav className="max-h-[calc(100dvh-env(safe-area-inset-top)-11rem)] overflow-y-auto overscroll-contain bg-white p-2 [-webkit-overflow-scrolling:touch]">
             {visible.map((item) => {
               const active = isActive(pathname, item.href, "exact" in item && item.exact);
               const count = badgeForHref(item.href, badges);
