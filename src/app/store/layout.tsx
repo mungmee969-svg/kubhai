@@ -29,7 +29,6 @@ export default async function StoreLayout({
     return children;
   }
 
-  // Fallback: unauthenticated traffic should only be login (proxy-enforced)
   const session = await getSession();
   if (!session) return children;
 
@@ -62,16 +61,14 @@ export default async function StoreLayout({
     .map((item) => item.bookingId);
   const badges = {
     ...notifBadges,
-    // งานจอง = unique actionable bookings, not notification fan-out
     bookings: bookingWorkloadBadgeCount(bookings, pendingProofIds),
   };
-  // Plan-gated destinations stay out of nav; the page itself also re-checks.
   const hiddenNavHrefs = allowsTripPackages(ctx.business.subscriptionPlan)
     ? []
     : ["/store/trip-packages"];
 
   return (
-    <StoreBrandScope brand={brand} className="min-h-dvh bg-paper">
+    <StoreBrandScope brand={brand} className="min-h-dvh min-w-0 overflow-x-hidden bg-paper">
       <aside
         className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line print:hidden lg:flex"
         style={{ background: brand.primaryColor, color: "#fff" }}
@@ -84,52 +81,35 @@ export default async function StoreLayout({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto text-white [&_a]:text-white/85 [&_a[aria-current=page]]:bg-white/15 [&_a[aria-current=page]]:text-white">
-          <StoreNavLinks
-            storeSlug={ctx.business.slug}
-            badges={badges}
-            hiddenHrefs={hiddenNavHrefs}
-          />
+          <StoreNavLinks storeSlug={ctx.business.slug} badges={badges} hiddenHrefs={hiddenNavHrefs} />
         </div>
         <div className="border-t border-white/15 px-4 py-4 text-xs text-white/70">
-          <Link href="/store/settings" className="block text-white">
-            ตั้งค่าร้าน
-          </Link>
+          <Link href="/store/settings" className="block text-white">ตั้งค่าร้าน</Link>
           <p className="mt-2">v{APP_VERSION}</p>
           <PoweredByKubHaiSubtle enabled={brand.poweredByKubHaiEnabled} className="mt-2 justify-start text-white/50" />
           <p className="mt-2 truncate text-white">{ctx.session.email}</p>
-          <form action={logoutAction} className="mt-2">
-            <button className="text-white">ออกจากระบบ</button>
-          </form>
+          <form action={logoutAction} className="mt-2"><button className="text-white">ออกจากระบบ</button></form>
         </div>
       </aside>
 
-      <div className="lg:pl-64">
+      <div className="min-w-0 lg:pl-64">
         <header className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur print:hidden">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <StoreDrawer
-              businessName={brand.businessName}
-              storeSlug={ctx.business.slug}
-              badges={badges}
-              hiddenHrefs={hiddenNavHrefs}
-            />
-            <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4">
+            <StoreDrawer businessName={brand.businessName} storeSlug={ctx.business.slug} badges={badges} hiddenHrefs={hiddenNavHrefs} />
+            <div className="min-w-0 flex-1 sm:flex-none">
               <p className="truncate text-sm font-semibold text-navy-800">{brand.businessName}</p>
-              <p className="text-[11px] text-muted">
-                {ctx.session.role === "BUSINESS_STAFF" ? "พนักงานร้าน" : "เจ้าของร้าน"}
-              </p>
+              <p className="truncate text-[11px] text-muted">{ctx.session.role === "BUSINESS_STAFF" ? "พนักงานร้าน" : "เจ้าของร้าน"}</p>
             </div>
-            <StoreSearch businessId={ctx.businessId} />
-            <NotificationCenter businessId={ctx.businessId} initial={notifications} />
-            <div className="hidden text-right text-xs text-muted md:block">
-              <p className="truncate text-navy-800">{ctx.session.email}</p>
-            </div>
+            <div className="hidden min-w-0 flex-1 sm:block"><StoreSearch businessId={ctx.businessId} /></div>
+            <div className="shrink-0"><NotificationCenter businessId={ctx.businessId} initial={notifications} /></div>
+            <div className="hidden max-w-48 text-right text-xs text-muted md:block"><p className="truncate text-navy-800">{ctx.session.email}</p></div>
           </div>
         </header>
-        <main className="px-4 py-6 pb-24 lg:px-8 lg:pb-8 print:p-0">{children}</main>
+        <main className="min-w-0 overflow-x-hidden px-3 py-5 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-6 lg:overflow-visible lg:px-8 lg:pb-8 print:p-0">
+          {children}
+        </main>
       </div>
-      <div className="print:hidden">
-        <StoreMobileNav badges={badges} />
-      </div>
+      <div className="print:hidden"><StoreMobileNav badges={badges} /></div>
     </StoreBrandScope>
   );
 }
