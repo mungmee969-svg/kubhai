@@ -2,16 +2,23 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CustomerExperienceShell } from "@/components/storefront/CustomerExperienceShell";
 import { PartnerCustomerNav } from "@/components/storefront/PartnerCustomerNav";
-import { StoreLogo } from "@/components/brand/StoreBrand";
+import { CustomerStoreIdentityLink } from "@/components/brand/CustomerStoreIdentityLink";
 import { partnerLoginHref } from "@/lib/auth/customer-auth-links";
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import { getStore } from "@/lib/data";
 import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
-import { allowsCustomerLocales } from "@/lib/domain/booking-entitlements";
+import {
+  allowsCustomerLocales,
+  allowsTripDiscovery,
+} from "@/lib/domain/booking-entitlements";
 import { formatThaiDate } from "@/lib/domain/ops";
 import { customerStatusLabel } from "@/lib/domain/status-ui";
 import { SERVICE_TYPE_LABELS } from "@/lib/domain/enums";
-import { serverT } from "@/lib/i18n/server";
+import {
+  readCustomerLocaleCookie,
+  readCustomerThemeCookie,
+  serverT,
+} from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +42,11 @@ export default async function PartnerBookingDetailPage({
   const brand = resolveCustomerStorefrontBranding(store.business);
   const multilingual = allowsCustomerLocales(store.business.subscriptionPlan);
   const booking = record.booking;
-  const [detailTitle, backLink] = await Promise.all([
+  const [detailTitle, backLink, locale, theme] = await Promise.all([
     serverT("myBookings.detail"),
     serverT("myBookings.back"),
+    readCustomerLocaleCookie(),
+    readCustomerThemeCookie(),
   ]);
 
   // Prefer secure token page for full quotation/payment UX when available
@@ -50,19 +59,26 @@ export default async function PartnerBookingDetailPage({
       brand={brand}
       storeSlug={slug}
       multilingual={multilingual}
+      initialLocale={locale}
+      initialTheme={theme}
       className="min-h-dvh"
     >
       <header className="bg-[color:var(--store-primary,#0F3D3E)] text-white">
         <div className="mx-auto max-w-lg px-4 py-4">
-          <div className="flex items-center gap-2.5">
-            <StoreLogo brand={brand} size={36} className="bg-white" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{brand.businessName}</p>
-              <p className="text-[11px] text-white/75">{detailTitle}</p>
-            </div>
-          </div>
+          <CustomerStoreIdentityLink
+            brand={brand}
+            storeSlug={slug}
+            subtitle={detailTitle}
+            className="max-w-full"
+            subtitleClassName="text-white/75"
+          />
           <div className="mt-3">
-            <PartnerCustomerNav slug={slug} loggedIn active="account" />
+            <PartnerCustomerNav
+              slug={slug}
+              loggedIn
+              active="account"
+              showTravel={allowsTripDiscovery(store.business.subscriptionPlan)}
+            />
           </div>
         </div>
       </header>

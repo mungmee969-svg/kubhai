@@ -20,9 +20,14 @@ import type {
   Customer,
   Driver,
   Place,
+  PlacePlatformModerationStatus,
   Profile,
   Province,
   Region,
+  SaasBillingPeriod,
+  SaasPayment,
+  SaasPaymentProof,
+  SaasSubscription,
   StaffMember,
   StoreInboxCounts,
   TripPackage,
@@ -33,6 +38,10 @@ import type {
   Vehicle,
 } from "@/lib/domain/types";
 import type { OwnershipType, DriverType } from "@/lib/domain/enums";
+import type {
+  HomepageConfig,
+  HomepageWorkspace,
+} from "@/lib/domain/homepage-cms";
 
 export class TenantIsolationError extends Error {
   constructor(message = "ไม่มีสิทธิ์เข้าถึงข้อมูลร้านนี้") {
@@ -178,6 +187,33 @@ export type ApproveProofResult = {
   reused: boolean;
 };
 
+export type SaasBillingAccount = {
+  subscription: SaasSubscription | null;
+  billingPeriods: SaasBillingPeriod[];
+  paymentProofs: SaasPaymentProof[];
+  payments: SaasPayment[];
+  auditLogs: AuditLog[];
+};
+
+export type MerchantProvisionInput = {
+  idempotencyKey: string;
+  email: string;
+  password: string;
+  ownerName: string;
+  storeName: string;
+  storeSlug: string;
+  planId: "starter" | "pro" | "business";
+};
+
+export type SaasDashboard = {
+  totalStores: number;
+  activeSubscriptions: number;
+  awaitingReview: number;
+  overdueSubscriptions: number;
+  revenueThisMonthThb: number;
+  planDistribution: Record<"starter" | "pro" | "business", number>;
+};
+
 export type BookingFinancePlan = {
   quotedTotal?: number | null;
   depositAmount?: number | null;
@@ -282,6 +318,11 @@ export type AssignmentPreview = {
 
 export type Store = {
   getPublicStore(slug: string): Promise<PublicStore | null>;
+  listPublicStores(businessIds?: string[]): Promise<PublicStore[]>;
+  getPublishedHomepageConfig(): Promise<HomepageConfig>;
+  getHomepageWorkspace(actor: Actor): Promise<HomepageWorkspace>;
+  saveHomepageDraft(actor: Actor, config: HomepageConfig): Promise<HomepageWorkspace>;
+  publishHomepageDraft(actor: Actor): Promise<HomepageWorkspace>;
   listPublicPlaces(opts?: {
     provinceSlug?: string | null;
     category?: string | null;
@@ -300,6 +341,16 @@ export type Store = {
   listCustomers(actor: Actor, businessId: string): Promise<Customer[]>;
   getCustomer(actor: Actor, customerId: string): Promise<Customer | null>;
   listPlaces(actor: Actor, businessId: string): Promise<Place[]>;
+  submitPlaceForPlatform(actor: Actor, placeId: string): Promise<Place>;
+  listPlatformPlaceSubmissions(
+    actor: Actor,
+    status?: PlacePlatformModerationStatus,
+  ): Promise<Place[]>;
+  reviewPlatformPlace(
+    actor: Actor,
+    placeId: string,
+    input: { decision: "APPROVE" | "REJECT"; reason?: string | null },
+  ): Promise<Place>;
   updateBusinessProfile(
     actor: Actor,
     businessId: string,
@@ -521,6 +572,56 @@ export type Store = {
     businessId: string,
   ): Promise<import("@/lib/domain/types").DriverRouteSuggestion[]>;
   listBusinesses(actor: Actor): Promise<Business[]>;
+  getSaasBillingAccount(actor: Actor, businessId: string): Promise<SaasBillingAccount>;
+  submitSaasPaymentProof(
+    actor: Actor,
+    input: {
+      businessId: string;
+      billingPeriodId: string;
+      submittedAmountThb: number;
+      originalFileName: string;
+      mime: "image/jpeg" | "image/png" | "image/webp";
+      imageDataUrl: string;
+    },
+  ): Promise<SaasPaymentProof>;
+  listPlatformSaasProofs(
+    actor: Actor,
+    status?: SaasPaymentProof["status"],
+  ): Promise<SaasPaymentProof[]>;
+  reviewSaasPaymentProof(
+    actor: Actor,
+    proofId: string,
+    input: { decision: "APPROVE" | "REJECT"; reason?: string | null },
+  ): Promise<{ proof: SaasPaymentProof; payment: SaasPayment | null; reused: boolean }>;
+  updateSaasSubscription(
+    actor: Actor,
+    subscriptionId: string,
+    input: {
+      planId?: "starter" | "pro" | "business";
+      status?: SaasSubscription["status"];
+      extendUntil?: string | null;
+      reason: string;
+    },
+  ): Promise<SaasSubscription>;
+  issueSaasBillingPeriod(
+    actor: Actor,
+    businessId: string,
+    input: {
+      planId: "starter" | "pro" | "business";
+      periodStart: string;
+      dueAt: string;
+      reason: string;
+    },
+  ): Promise<{ subscription: SaasSubscription; billingPeriod: SaasBillingPeriod }>;
+  getPlatformSaasDashboard(actor: Actor): Promise<SaasDashboard>;
+  provisionMerchant(
+    input: MerchantProvisionInput,
+  ): Promise<{
+    profile: Profile;
+    business: Business;
+    subscription: SaasSubscription;
+    reused: boolean;
+  }>;
   authenticate(
     email: string,
     password: string,

@@ -5,7 +5,7 @@
 
 import type { Business, Province, Region } from "./types";
 import {
-  resolveBusinessBranding,
+  resolveCustomerStorefrontBranding,
   type BusinessBranding,
   sanitizeHexColor,
 } from "./branding";
@@ -95,7 +95,7 @@ export function resolveBookingPresentation(input: {
   region?: Region | null;
 }): BookingPresentation {
   const { business, province = null, region = null } = input;
-  const brand = resolveBusinessBranding(business);
+  const brand = resolveCustomerStorefrontBranding(business);
   const locationTheme = resolveBookingLocationTheme({
     provinceId: province?.id ?? business.provinceId,
     provinceSlug: province?.slug ?? null,
@@ -144,10 +144,7 @@ export function resolveBookingPresentation(input: {
     displayTagline = storedTagline || brand.bookingTagline;
   } else if (storedTagline) {
     // Retained custom tagline must not render without entitlement
-    displayTagline =
-      business.customerSupportText?.trim() ||
-      (business.slug === "pondcarrent" ? "เดินทางเชียงใหม่อย่างสบายใจ" : null) ||
-      null;
+    displayTagline = brand.bookingTagline;
   } else {
     displayTagline = brand.bookingTagline;
   }

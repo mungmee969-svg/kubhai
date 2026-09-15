@@ -20,6 +20,7 @@ export function PartnerCustomerNav({
   variant = "bar",
   loggedIn = false,
   showPackages = false,
+  showTravel = true,
 }: {
   slug: string;
   loggedIn?: boolean;
@@ -27,6 +28,8 @@ export function PartnerCustomerNav({
   variant?: "bar" | "pills";
   /** Entitled plan with at least one published package */
   showPackages?: boolean;
+  /** storefront.tripDiscovery entitlement */
+  showTravel?: boolean;
 }) {
   const { t, allowedLocales } = useCustomerPrefs();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -39,7 +42,9 @@ export function PartnerCustomerNav({
     ...(showPackages
       ? [{ key: "packages" as const, href: `/s/${slug}/packages`, label: t("nav.packages") }]
       : []),
-    { key: "travel" as const, href: `/s/${slug}/travel`, label: t("nav.travel") },
+    ...(showTravel
+      ? [{ key: "travel" as const, href: `/s/${slug}/travel`, label: t("nav.travel") }]
+      : []),
     { key: "account" as const, href: bookingsHref, label: t("nav.myBookings") },
   ];
 
@@ -74,7 +79,9 @@ export function PartnerCustomerNav({
             onClick={() => setMenuOpen(true)}
             aria-label={t("nav.settings")}
           >
-            {allowedLocales.length > 1 ? "TH·EN" : t("nav.settings")}
+            {allowedLocales.length > 1
+              ? allowedLocales.map((item) => (item === "zh" ? "中文" : item.toUpperCase())).join("·")
+              : t("nav.settings")}
           </button>
           <CustomerPrefsSheet open={menuOpen} onClose={() => setMenuOpen(false)} />
         </div>
@@ -85,7 +92,9 @@ export function PartnerCustomerNav({
   return (
     <div className="space-y-2">
       <nav
-        className={`grid gap-2 ${items.length >= 4 ? "grid-cols-4" : "grid-cols-3"}`}
+        className={`grid gap-2 ${
+          items.length >= 4 ? "grid-cols-4" : items.length === 3 ? "grid-cols-3" : "grid-cols-2"
+        }`}
         aria-label={t("nav.aria")}
       >
         {items.map((item) => {

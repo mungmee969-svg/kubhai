@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { PartnerStorefront } from "@/components/storefront/PartnerStorefront";
 import type { BookingSource } from "@/lib/domain/enums";
 import type { TripPackage } from "@/lib/domain/trip-package";
+import type { CustomerLocale } from "@/lib/i18n/locales";
+import type { CustomerTheme } from "@/lib/i18n/theme";
 import type {
   Business,
   BusinessSettings,
@@ -24,6 +26,8 @@ type Props = {
   prefill?: { name?: string; phone?: string };
   loggedIn?: boolean;
   multilingual?: boolean;
+  initialLocale?: CustomerLocale;
+  initialTheme?: CustomerTheme;
 };
 
 export function StorefrontView(props: Props) {

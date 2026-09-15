@@ -97,6 +97,13 @@ assert(
   Object.keys(en).every((key) => key in th) && Object.keys(zh).every((key) => key in th),
 );
 assert("storefront.heroTitle present", "storefront.heroTitle" in th && "storefront.heroTitle" in en);
+assert(
+  "default Hero copy is location-neutral",
+  th["storefront.heroTitle"] === "เดินทางอย่างสบายใจ พร้อมรอยยิ้มในทุกเส้นทาง" &&
+    en["storefront.heroTitle"] === "Travel with ease, smile all the way." &&
+    zh["storefront.heroTitle"] === "轻松出行，一路微笑" &&
+    !th["storefront.heroTitle"].includes("{place}"),
+);
 assert("travel.subtitle present", "travel.subtitle" in th && "travel.all" in zh);
 
 for (const locale of CUSTOMER_LOCALES) {
@@ -135,7 +142,15 @@ const storefront = read("src/components/storefront/PartnerStorefront.tsx");
 assert("storefront no PoweredBy", !storefront.includes("PoweredByKubHai"));
 assert("storefront uses CustomerExperienceShell", storefront.includes("CustomerExperienceShell"));
 assert("storefront uses storefront.heroTitle", storefront.includes("storefront.heroTitle"));
+assert(
+  "entitled CMS tagline overrides default Hero headline",
+  storefront.includes("showCmsTagline ? presentation.displayTagline"),
+);
 assert("storefront no hardcoded Thai hero", !storefront.includes("เดินทางเชียงใหม่"));
+assert(
+  "storefront enforces trip-discovery entitlement",
+  storefront.includes("allowsTripDiscovery") && storefront.includes("showTravel"),
+);
 
 const travel = read("src/components/storefront/PartnerTravelDiscovery.tsx");
 assert("travel uses travel.title", travel.includes("travel.title"));
@@ -156,8 +171,23 @@ assert("shell has cx-brandFg for dark links", shell.includes("--cx-brandFg"));
 assert("place.category.spa synced", "place.category.spa" in th && "place.category.spa" in en && "place.category.spa" in zh);
 
 const wizard = read("src/components/storefront/BookingWizard.tsx");
+const wizardChrome = read("src/components/storefront/BookingWizardChrome.tsx");
 assert("wizard no PoweredBy", !wizard.includes("PoweredByKubHai"));
 assert("wizard uses t()", wizard.includes("useCustomerPrefs") || wizard.includes(".t(") || wizard.includes(" t("));
+assert(
+  "wizard uses white-label-aware branding",
+  wizard.includes("resolveCustomerStorefrontBranding") &&
+    !wizard.includes("resolveBusinessBranding"),
+);
+assert(
+  "Quick Booking has explicit non-destructive store-home action",
+  wizardChrome.includes('t("booking.storeHome")') &&
+    wizardChrome.includes("storefrontPath(brand.slug)"),
+);
+assert(
+  "customer identity is a reusable home link",
+  wizardChrome.includes("CustomerStoreIdentityLink"),
+);
 
 const success = read("src/app/booking/[token]/success/page.tsx");
 assert("success view details CTA", success.includes("ดูรายละเอียดการจอง") || success.includes("success.viewDetails"));
@@ -165,12 +195,15 @@ assert("success my bookings partner path", success.includes("/bookings"));
 assert("success no PoweredBy", !success.includes("PoweredByKubHai"));
 assert("success carries claim through login", success.includes("partnerLoginHrefWithClaim"));
 assert("success claims directly when logged in", success.includes("partnerBookingsClaimPath"));
+assert("success uses customer locale/theme shell", success.includes("CustomerExperienceShell"));
+assert("success uses localized system copy", success.includes('t("success.title.request")'));
 
 const tokenPage = read("src/app/booking/[token]/page.tsx");
 assert("token page mounts account banner", tokenPage.includes("BookingAccountBanner"));
 assert("token page passes storeSlug to banner", tokenPage.includes("storeSlug={business.slug}"));
 assert("token page retries claim from query", tokenPage.includes('query.claim === "1"'));
 assert("token page claims only when phone verified", tokenPage.includes("session?.phoneVerified"));
+assert("token page uses customer locale/theme shell", tokenPage.includes("CustomerExperienceShell"));
 
 const banner = read("src/components/booking/BookingAccountBanner.tsx");
 assert("banner is partner-aware (no KubHai account copy)", !banner.includes("บัญชี KubHai"));
@@ -210,6 +243,19 @@ assert(
   authCtx.includes("เข้าสู่ระบบเพื่อดูการจองของคุณ"),
 );
 assert("partner poweredBy forced false", authCtx.includes("poweredByKubHaiEnabled: false"));
+assert(
+  "partner auth branding obeys white-label entitlement",
+  authCtx.includes("resolveCustomerStorefrontBranding") &&
+    !authCtx.includes("resolveBusinessBranding"),
+);
+
+const travelPage = read("src/app/s/[slug]/travel/page.tsx");
+const travelDetailPage = read("src/app/s/[slug]/travel/[placeSlug]/page.tsx");
+assert(
+  "travel routes enforce entitlement",
+  travelPage.includes("allowsTripDiscovery") &&
+    travelDetailPage.includes("allowsTripDiscovery"),
+);
 
 const bookingsPage = read("src/app/s/[slug]/bookings/page.tsx");
 assert("partner my bookings route", bookingsPage.includes("listCustomerBookings"));

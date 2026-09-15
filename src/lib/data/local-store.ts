@@ -17,9 +17,18 @@ import {
   seedQuotationLines,
 } from "@/lib/domain/quotation";
 import { publicVehicle } from "@/lib/domain/public-view";
-import { normalizePlace } from "@/lib/domain/place-normalize";
+import {
+  isPlatformDiscoveryEligible,
+  normalizePlace,
+} from "@/lib/domain/place-normalize";
 import { normalizePartnerServiceTypes } from "@/lib/domain/partner-types";
 import { sanitizePlaceImages } from "@/lib/domain/place-image";
+import {
+  homepageConfigSchema,
+  normalizeHomepageWorkspace,
+  type HomepageConfig,
+  type HomepageWorkspace,
+} from "@/lib/domain/homepage-cms";
 import {
   BOOKING_APPEARANCE_FIELD_CAPS,
   allowsTripPackages,
@@ -29,6 +38,7 @@ import {
   PLAN_UNLOCK_HINT,
 } from "@/lib/domain/booking-entitlements";
 import {
+  TRIP_PACKAGE_PRICING_MODES,
   isCustomerVisiblePackage,
   sortFeaturedPackages,
   type TripPackage,
@@ -68,6 +78,12 @@ import type {
   Place,
   Quotation,
   QuotationItem,
+  SaasBillingPeriod,
+  SaasPayment,
+  SaasPaymentProof,
+  SaasSubscription,
+  MerchantProvisioning,
+  Profile,
   StaffInvitation,
   StaffMember,
   Vehicle,
@@ -152,12 +168,15 @@ import {
   type DriverJobAdminSummary,
   type DriverJobRecord,
   type MoneyMovementInput,
+  type MerchantProvisionInput,
   type PaymentAccountInput,
   type PaymentProofSubmitInput,
   type PlaceInput,
   type PublicStore,
   type QuotationDraftInput,
   type QuotationRecord,
+  type SaasBillingAccount,
+  type SaasDashboard,
   type Store,
   type TenantBoard,
   type TripPatch,
@@ -173,6 +192,7 @@ import {
 import { sniffImage } from "./image-bytes";
 import { deletePrivateSlip, readPrivateSlip, writePrivateSlip } from "./private-slips";
 import { SEED } from "./seed-ids";
+import { PUBLIC_SAAS_PLANS } from "@/lib/domain/saas-plans";
 import {
   seedBusinessUsers,
   seedBusinesses,
@@ -196,8 +216,8 @@ type Db = {
   settings: BusinessSettings[];
   vehicles: Vehicle[];
   drivers: Driver[];
-  profiles: typeof seedProfiles;
-  businessUsers: typeof seedBusinessUsers;
+  profiles: Profile[];
+  businessUsers: BusinessUser[];
   places: typeof seedPlaces;
   tripPackages: TripPackage[];
   customers: Customer[];
@@ -221,6 +241,12 @@ type Db = {
   driverDayLogs: DriverDayWorkLog[];
   driverRouteSuggestions: DriverRouteSuggestion[];
   notificationReads: NotificationRead[];
+  saasSubscriptions: SaasSubscription[];
+  saasBillingPeriods: SaasBillingPeriod[];
+  saasPaymentProofs: SaasPaymentProof[];
+  saasPayments: SaasPayment[];
+  merchantProvisionings: MerchantProvisioning[];
+  homepageWorkspace: HomepageWorkspace;
 };
 
 const DB_PATH = path.join(process.cwd(), "data", "local-dev.json");
@@ -261,6 +287,12 @@ function emptyDb(): Db {
     driverDayLogs: [],
     driverRouteSuggestions: [],
     notificationReads: [],
+    saasSubscriptions: [],
+    saasBillingPeriods: [],
+    saasPaymentProofs: [],
+    saasPayments: [],
+    merchantProvisionings: [],
+    homepageWorkspace: normalizeHomepageWorkspace(null),
   };
 }
 
@@ -269,6 +301,7 @@ function normalizeDb(raw: Partial<Db>): Db {
   return {
     ...base,
     ...raw,
+    homepageWorkspace: normalizeHomepageWorkspace(raw.homepageWorkspace),
     settings: (raw.settings ?? base.settings).map((item) => ({
       ...item,
       tips:
@@ -335,7 +368,40 @@ function normalizeDb(raw: Partial<Db>): Db {
       const merged = incoming.map((item) => {
         seen.add(item.id);
         const seed = seedById.get(item.id);
-        return (seed ? { ...item, ...seed } : item) as TripPackage;
+        const legacy = item as TripPackage & {
+          quoteFirst?: boolean;
+          startingPrice?: number | null;
+        };
+        const {
+          quoteFirst: legacyQuoteFirst,
+          startingPrice: legacyStartingPrice,
+          ...persisted
+        } = legacy;
+        const pricingMode =
+          persisted.pricingMode ??
+          (legacyQuoteFirst === false && legacyStartingPrice != null
+            ? "STARTING_PRICE"
+            : "QUOTE_FIRST");
+        const priceAmount =
+          pricingMode === "QUOTE_FIRST"
+            ? null
+            : persisted.priceAmount ?? legacyStartingPrice ?? null;
+        // Seed supplies migration defaults only. Persisted CMS edits must win.
+        return (seed
+          ? {
+              ...seed,
+              ...persisted,
+              pricingMode,
+              priceAmount,
+              title: { ...seed.title, ...persisted.title },
+              summary: { ...seed.summary, ...persisted.summary },
+              highlights: { ...seed.highlights, ...persisted.highlights },
+              included: { ...seed.included, ...persisted.included },
+              notIncluded: { ...seed.notIncluded, ...persisted.notIncluded },
+              conditions: { ...seed.conditions, ...persisted.conditions },
+              notes: { ...seed.notes, ...persisted.notes },
+            }
+          : { ...persisted, pricingMode, priceAmount }) as TripPackage;
       });
       for (const seed of seedTripPackages) {
         if (!seen.has(seed.id)) merged.push(structuredClone(seed));
@@ -344,6 +410,7 @@ function normalizeDb(raw: Partial<Db>): Db {
     })(),
     bookings: (raw.bookings ?? []).map((item) => ({
       ...item,
+      tripPackageId: item.tripPackageId ?? null,
       driverFeeAmount: item.driverFeeAmount ?? null,
       receivingAccountId: item.receivingAccountId ?? null,
       acceptedQuotationId: item.acceptedQuotationId ?? null,
@@ -426,6 +493,11 @@ function normalizeDb(raw: Partial<Db>): Db {
       qrDisplayEnabled: item.qrDisplayEnabled ?? Boolean(item.qrImagePath || item.id === SEED.accountPondScb),
     })),
     paymentProofs: raw.paymentProofs ?? [],
+    saasSubscriptions: raw.saasSubscriptions ?? [],
+    saasBillingPeriods: raw.saasBillingPeriods ?? [],
+    saasPaymentProofs: raw.saasPaymentProofs ?? [],
+    saasPayments: raw.saasPayments ?? [],
+    merchantProvisionings: raw.merchantProvisionings ?? [],
     slipFiles: raw.slipFiles ?? [],
     quotations: (raw.quotations ?? []).map((rawItem) => {
       const item = rawItem as Quotation & {
@@ -504,6 +576,10 @@ function isSuper(actor: Actor): boolean {
   return actor.kind === "user" && actor.role === "SUPER_ADMIN";
 }
 
+function assertSuperAdmin(actor: Actor): asserts actor is Extract<Actor, { kind: "user" }> {
+  if (!isSuper(actor)) throw new TenantIsolationError("สำหรับผู้ดูแลแพลตฟอร์มเท่านั้น");
+}
+
 function assertBusinessAccess(actor: Actor, businessId: string): void {
   if (
     actor.kind === "public" ||
@@ -573,6 +649,18 @@ function stamp(): string {
   return new Date().toISOString();
 }
 
+function addCalendarMonth(iso: string): string {
+  const date = new Date(iso);
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + 1);
+  const lastDay = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDay));
+  return date.toISOString();
+}
+
 function audit(
   db: Db,
   actor: Actor,
@@ -598,6 +686,46 @@ function audit(
   });
 }
 
+function hydratePublicStore(db: Db, business: Business): PublicStore {
+  return {
+    business,
+    settings: db.settings.find((item) => item.businessId === business.id) ?? null,
+    vehicles: db.vehicles
+      .filter(
+        (item) =>
+          item.businessId === business.id &&
+          item.active &&
+          item.status === "ACTIVE",
+      )
+      .map(publicVehicle),
+    places: db.places.filter(
+      (item) =>
+        item.status === "ACTIVE" &&
+        (item.businessId === business.id || item.businessId === null) &&
+        item.provinceId === business.provinceId,
+    ),
+    region: db.regions.find((item) => item.id === business.regionId) ?? null,
+    province: db.provinces.find((item) => item.id === business.provinceId) ?? null,
+  };
+}
+
+function placeModerationFingerprint(place: Place): string {
+  return JSON.stringify({
+    category: place.category,
+    name: place.name,
+    shortDescription: place.shortDescription,
+    description: place.description,
+    address: place.address,
+    area: place.area,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    googlePlaceId: place.googlePlaceId,
+    imageUrls: place.imageUrls,
+    coverImageUrl: place.coverImageUrl,
+    estimatedDurationMinutes: place.estimatedDurationMinutes,
+  });
+}
+
 export class LocalStore implements Store {
   async getPublicStore(slug: string): Promise<PublicStore | null> {
     const db = await readDb();
@@ -605,27 +733,105 @@ export class LocalStore implements Store {
       (item) => item.slug === slug && item.status === "ACTIVE",
     );
     if (!business) return null;
-    return {
-      business,
-      settings: db.settings.find((item) => item.businessId === business.id) ?? null,
-      vehicles: db.vehicles
-        .filter(
-          (item) =>
-            item.businessId === business.id &&
-            item.active &&
-            item.status === "ACTIVE",
-        )
-        .map(publicVehicle),
-      places: db.places.filter(
-        (item) =>
-          item.status === "ACTIVE" &&
-          (item.businessId === business.id || item.businessId === null) &&
-          item.provinceId === business.provinceId,
-      ),
-      region: db.regions.find((item) => item.id === business.regionId) ?? null,
-      province:
-        db.provinces.find((item) => item.id === business.provinceId) ?? null,
-    };
+    return hydratePublicStore(db, business);
+  }
+
+  async listPublicStores(businessIds?: string[]): Promise<PublicStore[]> {
+    const db = await readDb();
+    const allowedIds = businessIds ? new Set(businessIds) : null;
+    return db.businesses
+      .filter(
+        (business) =>
+          business.status === "ACTIVE" &&
+          (!allowedIds || allowedIds.has(business.id)),
+      )
+      .map((business) => hydratePublicStore(db, business));
+  }
+
+  async getPublishedHomepageConfig(): Promise<HomepageConfig> {
+    const db = await readDb();
+    return structuredClone(normalizeHomepageWorkspace(db.homepageWorkspace).published);
+  }
+
+  async getHomepageWorkspace(actor: Actor): Promise<HomepageWorkspace> {
+    assertSuperAdmin(actor);
+    const db = await readDb();
+    return structuredClone(normalizeHomepageWorkspace(db.homepageWorkspace));
+  }
+
+  async saveHomepageDraft(
+    actor: Actor,
+    config: HomepageConfig,
+  ): Promise<HomepageWorkspace> {
+    assertSuperAdmin(actor);
+    return mutate((db) => {
+      const parsed = homepageConfigSchema.safeParse(config);
+      if (!parsed.success) {
+        throw new DomainError(parsed.error.issues[0]?.message ?? "ข้อมูลหน้าเว็บไซต์ไม่ถูกต้อง");
+      }
+      const categoryIds = parsed.data.categories.map((item) => item.id);
+      const sectionIds = parsed.data.sectionOrder;
+      if (
+        new Set(categoryIds).size !== categoryIds.length ||
+        new Set(sectionIds).size !== sectionIds.length
+      ) {
+        throw new DomainError("ลำดับส่วนหรือหมวดหมู่ซ้ำกัน");
+      }
+      const homepageProvince = db.provinces.find(
+        (item) => item.slug === parsed.data.search.defaultAreaSlug,
+      );
+      if (!homepageProvince) {
+        throw new DomainError("ไม่พบพื้นที่เริ่มต้นที่เลือก");
+      }
+      const placeIds = new Set(
+        db.places
+          .filter(
+            (item) =>
+              item.status === "ACTIVE" &&
+              item.provinceId === homepageProvince.id,
+          )
+          .map((item) => item.id),
+      );
+      if (parsed.data.recommended.placeIds.some((id) => !placeIds.has(id))) {
+        throw new DomainError("มีสถานที่แนะนำที่ไม่พร้อมเผยแพร่");
+      }
+      const businessIds = new Set(
+        db.businesses.filter((item) => item.status === "ACTIVE").map((item) => item.id),
+      );
+      if (parsed.data.agents.businessIds.some((id) => !businessIds.has(id))) {
+        throw new DomainError("มีร้านรถที่ไม่พร้อมเผยแพร่");
+      }
+
+      const now = stamp();
+      const workspace = normalizeHomepageWorkspace(db.homepageWorkspace);
+      workspace.draft = structuredClone(parsed.data);
+      workspace.draftUpdatedAt = now;
+      workspace.draftUpdatedBy = actor.userId;
+      workspace.hasUnpublishedChanges =
+        JSON.stringify(workspace.draft) !== JSON.stringify(workspace.published);
+      db.homepageWorkspace = workspace;
+      audit(db, actor, "HOMEPAGE_DRAFT_SAVED", "homepage", null, null, {
+        hasUnpublishedChanges: workspace.hasUnpublishedChanges,
+      });
+      return structuredClone(workspace);
+    });
+  }
+
+  async publishHomepageDraft(actor: Actor): Promise<HomepageWorkspace> {
+    assertSuperAdmin(actor);
+    return mutate((db) => {
+      const now = stamp();
+      const workspace = normalizeHomepageWorkspace(db.homepageWorkspace);
+      workspace.published = structuredClone(workspace.draft);
+      workspace.publishedAt = now;
+      workspace.publishedBy = actor.userId;
+      workspace.hasUnpublishedChanges = false;
+      db.homepageWorkspace = workspace;
+      audit(db, actor, "HOMEPAGE_PUBLISHED", "homepage", null, null, {
+        publishedAt: now,
+      });
+      return structuredClone(workspace);
+    });
   }
 
   async listPublicPlaces(opts?: {
@@ -638,7 +844,7 @@ export class LocalStore implements Store {
       provinceId = db.provinces.find((item) => item.slug === opts.provinceSlug)?.id ?? null;
     }
     return db.places.filter((item) => {
-      if (item.status !== "ACTIVE") return false;
+      if (!isPlatformDiscoveryEligible(item)) return false;
       if (provinceId && item.provinceId !== provinceId) return false;
       return true;
     });
@@ -649,7 +855,9 @@ export class LocalStore implements Store {
     province: { id: string; nameTh: string; slug: string } | null;
   } | null> {
     const db = await readDb();
-    const place = db.places.find((item) => item.slug === slug && item.status === "ACTIVE");
+    const place = db.places.find(
+      (item) => item.slug === slug && isPlatformDiscoveryEligible(item),
+    );
     if (!place) return null;
     const province = db.provinces.find((item) => item.id === place.provinceId) ?? null;
     return {
@@ -687,6 +895,16 @@ export class LocalStore implements Store {
         (item) => item.slug === input.businessSlug && item.status === "ACTIVE",
       );
       if (!business) throw new DomainError("ไม่พบร้านนี้");
+
+      if (input.tripPackageId) {
+        const sourcePackage = db.tripPackages.find(
+          (item) =>
+            item.id === input.tripPackageId &&
+            item.businessId === business.id &&
+            isCustomerVisiblePackage(item),
+        );
+        if (!sourcePackage) throw new DomainError("แพ็กเกจทริปนี้ไม่พร้อมให้จอง");
+      }
 
       const existing = db.bookings.find(
         (item) =>
@@ -740,6 +958,7 @@ export class LocalStore implements Store {
         bookingCode: newBookingCode(),
         securePublicToken: newSecureToken(),
         clientRequestId: input.clientRequestId,
+        tripPackageId: input.tripPackageId ?? null,
         customerId: customer.id,
         customerAccountId: (() => {
           const phone = normalizePhone(input.customerPhone);
@@ -1674,12 +1893,627 @@ export class LocalStore implements Store {
     return db.businesses.filter((item) => actor.businessIds.includes(item.id));
   }
 
+  async getSaasBillingAccount(
+    actor: Actor,
+    businessId: string,
+  ): Promise<SaasBillingAccount> {
+    const db = await readDb();
+    assertStorePermission(db, actor, businessId, "STORE_SETTINGS_MANAGE");
+    const subscription =
+      db.saasSubscriptions.find((item) => item.businessId === businessId) ?? null;
+    return {
+      subscription,
+      billingPeriods: db.saasBillingPeriods
+        .filter((item) => item.businessId === businessId)
+        .sort((a, b) => b.periodStart.localeCompare(a.periodStart)),
+      paymentProofs: db.saasPaymentProofs
+        .filter((item) => item.businessId === businessId)
+        .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)),
+      payments: db.saasPayments
+        .filter((item) => item.businessId === businessId)
+        .sort((a, b) => b.paidAt.localeCompare(a.paidAt)),
+      auditLogs: db.auditLogs
+        .filter(
+          (item) =>
+            item.businessId === businessId &&
+            (item.entityType === "saas_subscription" ||
+              item.entityType === "saas_billing_period" ||
+              item.entityType === "saas_payment_proof"),
+        )
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    };
+  }
+
+  async submitSaasPaymentProof(
+    actor: Actor,
+    input: {
+      businessId: string;
+      billingPeriodId: string;
+      submittedAmountThb: number;
+      originalFileName: string;
+      mime: "image/jpeg" | "image/png" | "image/webp";
+      imageDataUrl: string;
+    },
+  ): Promise<SaasPaymentProof> {
+    return mutate((db) => {
+      assertStorePermission(db, actor, input.businessId, "STORE_SETTINGS_MANAGE");
+      if (actor.kind !== "user") throw new TenantIsolationError();
+      const period = db.saasBillingPeriods.find(
+        (item) =>
+          item.id === input.billingPeriodId &&
+          item.businessId === input.businessId,
+      );
+      if (!period) throw new TenantIsolationError("ไม่พบรอบบิลของร้านนี้");
+      if (period.status === "PAID" || period.status === "CANCELLED") {
+        throw new DomainError("รอบบิลนี้ไม่เปิดรับหลักฐานการชำระ");
+      }
+      if (
+        !Number.isInteger(input.submittedAmountThb) ||
+        input.submittedAmountThb <= 0
+      ) {
+        throw new DomainError("ยอดชำระต้องเป็นจำนวนเต็มมากกว่า 0 บาท");
+      }
+      if (
+        !["image/jpeg", "image/png", "image/webp"].includes(input.mime) ||
+        input.imageDataUrl.length > 2_800_000 ||
+        !input.imageDataUrl.startsWith(`data:${input.mime};base64,`)
+      ) {
+        throw new DomainError("ไฟล์หลักฐานการชำระไม่ถูกต้อง");
+      }
+      const prior = db.saasPaymentProofs.find(
+        (item) =>
+          item.businessId === input.businessId &&
+          item.imageDataUrl === input.imageDataUrl,
+      );
+      const now = stamp();
+      const proof: SaasPaymentProof = {
+        id: newId(),
+        businessId: input.businessId,
+        billingPeriodId: period.id,
+        expectedAmountThb: period.amountThb,
+        submittedAmountThb: input.submittedAmountThb,
+        originalFileName: input.originalFileName.slice(0, 160),
+        mime: input.mime,
+        imageDataUrl: input.imageDataUrl,
+        submittedAt: now,
+        submittedByUserId: actor.userId,
+        status: "AWAITING_REVIEW",
+        reviewedAt: null,
+        reviewedByUserId: null,
+        rejectionReason: null,
+        providerVerificationResult: null,
+        duplicateOfProofId: prior?.id ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.saasPaymentProofs.push(proof);
+      period.status = "AWAITING_REVIEW";
+      audit(
+        db,
+        actor,
+        "SAAS_PAYMENT_PROOF_SUBMITTED",
+        "saas_payment_proof",
+        proof.id,
+        input.businessId,
+        {
+          billingPeriodId: period.id,
+          expectedAmountThb: period.amountThb,
+          submittedAmountThb: proof.submittedAmountThb,
+          duplicateOfProofId: proof.duplicateOfProofId,
+        },
+      );
+      return proof;
+    });
+  }
+
+  async listPlatformSaasProofs(
+    actor: Actor,
+    status?: SaasPaymentProof["status"],
+  ): Promise<SaasPaymentProof[]> {
+    assertSuperAdmin(actor);
+    const db = await readDb();
+    return db.saasPaymentProofs
+      .filter((item) => !status || item.status === status)
+      .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  }
+
+  async reviewSaasPaymentProof(
+    actor: Actor,
+    proofId: string,
+    input: { decision: "APPROVE" | "REJECT"; reason?: string | null },
+  ): Promise<{ proof: SaasPaymentProof; payment: SaasPayment | null; reused: boolean }> {
+    assertSuperAdmin(actor);
+    return mutate((db) => {
+      const proof = db.saasPaymentProofs.find((item) => item.id === proofId);
+      if (!proof) throw new DomainError("ไม่พบหลักฐานการชำระค่าระบบ");
+      const period = db.saasBillingPeriods.find(
+        (item) => item.id === proof.billingPeriodId,
+      );
+      if (!period || period.businessId !== proof.businessId) {
+        throw new TenantIsolationError("รอบบิลไม่ตรงกับหลักฐาน");
+      }
+      const subscription = db.saasSubscriptions.find(
+        (item) => item.id === period.subscriptionId,
+      );
+      if (!subscription || subscription.businessId !== proof.businessId) {
+        throw new TenantIsolationError("Subscription ไม่ตรงกับร้าน");
+      }
+      const existingPayment =
+        db.saasPayments.find((item) => item.billingPeriodId === period.id) ?? null;
+      if (input.decision === "APPROVE" && proof.status === "APPROVED") {
+        return { proof, payment: existingPayment, reused: true };
+      }
+      if (proof.status !== "AWAITING_REVIEW") {
+        throw new DomainError("หลักฐานนี้ถูกตรวจสอบแล้ว");
+      }
+      const now = stamp();
+      if (input.decision === "REJECT") {
+        const reason = input.reason?.trim();
+        if (!reason) throw new DomainError("กรุณาระบุเหตุผลที่ไม่ผ่าน");
+        proof.status = "REJECTED";
+        proof.reviewedAt = now;
+        proof.reviewedByUserId = actor.userId;
+        proof.rejectionReason = reason;
+        proof.updatedAt = now;
+        period.status = "REJECTED";
+        audit(
+          db,
+          actor,
+          "SAAS_PAYMENT_PROOF_REJECTED",
+          "saas_payment_proof",
+          proof.id,
+          proof.businessId,
+          { billingPeriodId: period.id, reason },
+        );
+        return { proof, payment: null, reused: false };
+      }
+
+      if (proof.submittedAmountThb !== proof.expectedAmountThb) {
+        throw new DomainError("ยอดที่แจ้งไม่ตรงกับยอดรอบบิล กรุณาปฏิเสธพร้อมเหตุผล");
+      }
+      proof.status = "APPROVED";
+      proof.reviewedAt = now;
+      proof.reviewedByUserId = actor.userId;
+      proof.rejectionReason = null;
+      proof.updatedAt = now;
+      const wasPaid = period.status === "PAID";
+      period.status = "PAID";
+      period.paidAt ??= now;
+      let payment = existingPayment;
+      if (!payment) {
+        payment = {
+          id: newId(),
+          businessId: period.businessId,
+          subscriptionId: subscription.id,
+          billingPeriodId: period.id,
+          paymentProofId: proof.id,
+          amountThb: proof.submittedAmountThb,
+          currency: "THB",
+          reference: `SAAS-${period.id.slice(0, 8).toUpperCase()}`,
+          paidAt: now,
+          approvedByUserId: actor.userId,
+          createdAt: now,
+        };
+        db.saasPayments.push(payment);
+      }
+      if (!wasPaid) {
+        subscription.planId = period.planIdSnapshot;
+        subscription.status = "ACTIVE";
+        subscription.currentPeriodStart = period.periodStart;
+        subscription.currentPeriodEnd = period.periodEnd;
+        subscription.nextDueAt = period.periodEnd;
+        subscription.updatedAt = now;
+        const business = db.businesses.find(
+          (item) => item.id === subscription.businessId,
+        );
+        if (business) {
+          business.subscriptionPlan = period.planIdSnapshot;
+          business.status = "ACTIVE";
+          business.updatedAt = now;
+        }
+      }
+      audit(
+        db,
+        actor,
+        "SAAS_PAYMENT_PROOF_APPROVED",
+        "saas_payment_proof",
+        proof.id,
+        proof.businessId,
+        {
+          billingPeriodId: period.id,
+          paymentId: payment.id,
+          amountThb: payment.amountThb,
+        },
+      );
+      return { proof, payment, reused: Boolean(existingPayment || wasPaid) };
+    });
+  }
+
+  async updateSaasSubscription(
+    actor: Actor,
+    subscriptionId: string,
+    input: {
+      planId?: "starter" | "pro" | "business";
+      status?: SaasSubscription["status"];
+      extendUntil?: string | null;
+      reason: string;
+    },
+  ): Promise<SaasSubscription> {
+    assertSuperAdmin(actor);
+    const reason = input.reason.trim();
+    if (!reason) throw new DomainError("กรุณาระบุเหตุผลการแก้ไข");
+    return mutate((db) => {
+      const subscription = db.saasSubscriptions.find(
+        (item) => item.id === subscriptionId,
+      );
+      if (!subscription) throw new DomainError("ไม่พบ Subscription");
+      const before = structuredClone(subscription);
+      if (input.planId) subscription.planId = input.planId;
+      if (input.status) subscription.status = input.status;
+      if (input.extendUntil !== undefined) {
+        if (
+          input.extendUntil &&
+          Number.isNaN(Date.parse(input.extendUntil))
+        ) {
+          throw new DomainError("วันหมดอายุไม่ถูกต้อง");
+        }
+        const normalizedEnd = input.extendUntil
+          ? new Date(input.extendUntil).toISOString()
+          : input.extendUntil;
+        subscription.currentPeriodEnd = normalizedEnd;
+        subscription.nextDueAt = normalizedEnd;
+      }
+      subscription.updatedAt = stamp();
+      const business = db.businesses.find(
+        (item) => item.id === subscription.businessId,
+      );
+      if (business) {
+        if (input.planId) {
+          business.subscriptionPlan = input.planId;
+        }
+        if (input.status) {
+          business.status =
+            input.status === "SUSPENDED" || input.status === "CANCELLED"
+              ? "SUSPENDED"
+              : "ACTIVE";
+        }
+        business.updatedAt = subscription.updatedAt;
+      }
+      audit(
+        db,
+        actor,
+        "SAAS_SUBSCRIPTION_MANUAL_CHANGE",
+        "saas_subscription",
+        subscription.id,
+        subscription.businessId,
+        { before, after: structuredClone(subscription), reason },
+      );
+      return subscription;
+    });
+  }
+
+  async getPlatformSaasDashboard(actor: Actor): Promise<SaasDashboard> {
+    assertSuperAdmin(actor);
+    const db = await readDb();
+    const month = stamp().slice(0, 7);
+    const planDistribution: SaasDashboard["planDistribution"] = {
+      starter: 0,
+      pro: 0,
+      business: 0,
+    };
+    for (const item of db.saasSubscriptions) planDistribution[item.planId] += 1;
+    return {
+      totalStores: db.businesses.length,
+      activeSubscriptions: db.saasSubscriptions.filter(
+        (item) => item.status === "ACTIVE",
+      ).length,
+      awaitingReview: db.saasPaymentProofs.filter(
+        (item) => item.status === "AWAITING_REVIEW",
+      ).length,
+      overdueSubscriptions: db.saasSubscriptions.filter(
+        (item) => item.status === "PAST_DUE",
+      ).length,
+      revenueThisMonthThb: db.saasPayments
+        .filter((item) => item.paidAt.startsWith(month))
+        .reduce((sum, item) => sum + item.amountThb, 0),
+      planDistribution,
+    };
+  }
+
+  async issueSaasBillingPeriod(
+    actor: Actor,
+    businessId: string,
+    input: {
+      planId: "starter" | "pro" | "business";
+      periodStart: string;
+      dueAt: string;
+      reason: string;
+    },
+  ): Promise<{ subscription: SaasSubscription; billingPeriod: SaasBillingPeriod }> {
+    assertSuperAdmin(actor);
+    const reason = input.reason.trim();
+    if (!reason) throw new DomainError("กรุณาระบุเหตุผลการออกรอบบิล");
+    const plan = PUBLIC_SAAS_PLANS.find((item) => item.id === input.planId);
+    if (!plan) throw new DomainError("ไม่พบแพ็กเกจ");
+    const periodStart = new Date(input.periodStart);
+    const dueAt = new Date(input.dueAt);
+    if (
+      Number.isNaN(periodStart.getTime()) ||
+      Number.isNaN(dueAt.getTime())
+    ) {
+      throw new DomainError("วันที่รอบบิลไม่ถูกต้อง");
+    }
+    return mutate((db) => {
+      const business = db.businesses.find((item) => item.id === businessId);
+      if (!business) throw new DomainError("ไม่พบร้าน");
+      const open = db.saasBillingPeriods.find(
+        (item) =>
+          item.businessId === businessId &&
+          ["PENDING", "AWAITING_REVIEW", "REJECTED", "OVERDUE"].includes(
+            item.status,
+          ),
+      );
+      if (open) throw new ConflictError("ร้านนี้มีรอบบิลที่ยังไม่ปิดอยู่แล้ว");
+      const now = stamp();
+      let subscription = db.saasSubscriptions.find(
+        (item) => item.businessId === businessId,
+      );
+      if (!subscription) {
+        subscription = {
+          id: newId(),
+          businessId,
+          planId: input.planId,
+          status: "PENDING_PAYMENT",
+          currentPeriodStart: null,
+          currentPeriodEnd: null,
+          nextDueAt: dueAt.toISOString(),
+          createdAt: now,
+          updatedAt: now,
+        };
+        db.saasSubscriptions.push(subscription);
+      } else {
+        subscription.planId = input.planId;
+        if (subscription.status !== "ACTIVE") {
+          subscription.status = "PENDING_PAYMENT";
+        }
+        subscription.nextDueAt = dueAt.toISOString();
+        subscription.updatedAt = now;
+      }
+      const billingPeriod: SaasBillingPeriod = {
+        id: newId(),
+        businessId,
+        subscriptionId: subscription.id,
+        planIdSnapshot: plan.id,
+        planNameSnapshot: plan.nameTh,
+        amountThb: plan.priceMonthlyThb,
+        currency: "THB",
+        periodStart: periodStart.toISOString(),
+        periodEnd: addCalendarMonth(periodStart.toISOString()),
+        dueAt: dueAt.toISOString(),
+        status: "PENDING",
+        createdAt: now,
+        paidAt: null,
+      };
+      db.saasBillingPeriods.push(billingPeriod);
+      audit(
+        db,
+        actor,
+        "SAAS_BILLING_PERIOD_ISSUED",
+        "saas_billing_period",
+        billingPeriod.id,
+        businessId,
+        {
+          planId: plan.id,
+          amountThb: plan.priceMonthlyThb,
+          periodStart: billingPeriod.periodStart,
+          periodEnd: billingPeriod.periodEnd,
+          dueAt: billingPeriod.dueAt,
+          reason,
+        },
+      );
+      return { subscription, billingPeriod };
+    });
+  }
+
+  async provisionMerchant(
+    input: MerchantProvisionInput,
+  ): Promise<{
+    profile: Profile;
+    business: Business;
+    subscription: SaasSubscription;
+    reused: boolean;
+  }> {
+    return mutate((db) => {
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(input.idempotencyKey)
+      ) {
+        throw new DomainError("Provisioning key ไม่ถูกต้อง");
+      }
+      const prior = db.merchantProvisionings.find(
+        (item) => item.idempotencyKey === input.idempotencyKey,
+      );
+      if (prior) {
+        const profile = db.profiles.find((item) => item.id === prior.ownerUserId);
+        const business = db.businesses.find((item) => item.id === prior.businessId);
+        const subscription = db.saasSubscriptions.find(
+          (item) => item.id === prior.subscriptionId,
+        );
+        if (profile && business && subscription) {
+          return { profile, business, subscription, reused: true };
+        }
+      }
+      const email = input.email.trim().toLowerCase();
+      const slug = input.storeSlug.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new DomainError("อีเมลไม่ถูกต้อง");
+      }
+      if (input.password.length < 8) {
+        throw new DomainError("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
+      }
+      if (!/^[a-z0-9][a-z0-9-]{2,39}$/.test(slug)) {
+        throw new DomainError("URL ร้านใช้ได้เฉพาะ a-z, 0-9 และขีดกลาง");
+      }
+      const plan = PUBLIC_SAAS_PLANS.find((item) => item.id === input.planId);
+      if (!plan) throw new DomainError("ไม่พบแพ็กเกจที่เลือก");
+      if (db.profiles.some((item) => item.email.toLowerCase() === email)) {
+        throw new ConflictError("อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบ");
+      }
+      if (db.businesses.some((item) => item.slug === slug)) {
+        throw new ConflictError("URL ร้านนี้ถูกใช้แล้ว");
+      }
+      const ownerName = input.ownerName.trim();
+      const storeName = input.storeName.trim();
+      if (!ownerName || !storeName) throw new DomainError("กรุณากรอกข้อมูลให้ครบ");
+      const now = stamp();
+      const profile: Profile = {
+        id: newId(),
+        email,
+        fullName: ownerName,
+        role: "BUSINESS_OWNER",
+        active: true,
+        passwordHash: hashPassword(input.password),
+      };
+      const business: Business = {
+        id: newId(),
+        name: storeName,
+        slug,
+        shortName: null,
+        logoUrl: null,
+        logoMarkUrl: null,
+        faviconUrl: null,
+        coverUrl: null,
+        bookingHeroImageUrl: null,
+        bookingMobileHeroImageUrl: null,
+        bookingTagline: null,
+        bookingLayoutPreset: null,
+        bookingThemePreset: null,
+        description: null,
+        phone: null,
+        lineUrl: null,
+        facebookUrl: null,
+        instagramUrl: null,
+        websiteUrl: null,
+        email,
+        regionId: null,
+        provinceId: null,
+        address: null,
+        latitude: null,
+        longitude: null,
+        timezone: "Asia/Bangkok",
+        currency: "THB",
+        status: "ACTIVE",
+        verifiedAt: null,
+        averageRating: null,
+        reviewCount: 0,
+        rankingScore: 0,
+        featured: false,
+        sponsored: false,
+        partnerServiceTypes: [],
+        commercialModel: "QUOTE_FIRST",
+        subscriptionPlan: plan.entitlementPlanId,
+        isSeed: false,
+        primaryColor: null,
+        secondaryColor: null,
+        accentColor: null,
+        textColor: null,
+        backgroundColor: null,
+        customerSupportText: null,
+        poweredByKubHaiEnabled: true,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const subscription: SaasSubscription = {
+        id: newId(),
+        businessId: business.id,
+        planId: plan.id,
+        status: "PENDING_PAYMENT",
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        nextDueAt: now,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const periodEnd = addCalendarMonth(now);
+      const billingPeriod: SaasBillingPeriod = {
+        id: newId(),
+        businessId: business.id,
+        subscriptionId: subscription.id,
+        planIdSnapshot: plan.id,
+        planNameSnapshot: plan.nameTh,
+        amountThb: plan.priceMonthlyThb,
+        currency: "THB",
+        periodStart: now,
+        periodEnd,
+        dueAt: now,
+        status: "PENDING",
+        createdAt: now,
+        paidAt: null,
+      };
+      const membership: BusinessUser = {
+        id: newId(),
+        businessId: business.id,
+        userId: profile.id,
+        role: "BUSINESS_OWNER",
+        staffRole: "OWNER",
+        permissions: permissionsForRole("OWNER"),
+        phone: null,
+        lastLoginAt: null,
+        active: true,
+      };
+      const settings: BusinessSettings = {
+        id: newId(),
+        businessId: business.id,
+        faq: [],
+        tips: [],
+        bookingNotes: null,
+        defaultDepositPercent: null,
+        allowPartnerVehicles: false,
+        ops: null,
+      };
+      db.profiles.push(profile);
+      db.businesses.push(business);
+      db.businessUsers.push(membership);
+      db.settings.push(settings);
+      db.saasSubscriptions.push(subscription);
+      db.saasBillingPeriods.push(billingPeriod);
+      db.merchantProvisionings.push({
+        idempotencyKey: input.idempotencyKey,
+        ownerUserId: profile.id,
+        businessId: business.id,
+        subscriptionId: subscription.id,
+        createdAt: now,
+      });
+      const actor: Actor = {
+        kind: "user",
+        userId: profile.id,
+        role: "BUSINESS_OWNER",
+        businessIds: [business.id],
+      };
+      audit(
+        db,
+        actor,
+        "MERCHANT_WORKSPACE_PROVISIONED",
+        "business",
+        business.id,
+        business.id,
+        {
+          planId: plan.id,
+          subscriptionId: subscription.id,
+          billingPeriodId: billingPeriod.id,
+          paymentStatus: billingPeriod.status,
+        },
+      );
+      return { profile, business, subscription, reused: false };
+    });
+  }
+
   async authenticate(email: string, password: string) {
     const db = await readDb();
     const profile = db.profiles.find(
       (item) =>
         item.email.toLowerCase() === email.toLowerCase() &&
-        item.passwordHash === password &&
+        Boolean(item.passwordHash) &&
+        (item.passwordHash === password || verifyPassword(password, item.passwordHash!)) &&
         item.active,
     );
     if (!profile) return null;
@@ -2371,6 +3205,100 @@ export class LocalStore implements Store {
     );
   }
 
+  async submitPlaceForPlatform(actor: Actor, placeId: string) {
+    return mutate((db) => {
+      const place = db.places.find((item) => item.id === placeId);
+      if (!place?.businessId || place.sourceType !== "AGENT") {
+        throw new TenantIsolationError("เสนอได้เฉพาะสถานที่ของร้าน");
+      }
+      assertStorePermission(db, actor, place.businessId, "BRANDING_MANAGE");
+      if (place.platformModerationStatus === "PENDING_REVIEW") {
+        throw new DomainError("สถานที่นี้กำลังรอตรวจสอบ");
+      }
+      if (place.platformModerationStatus === "APPROVED") {
+        throw new DomainError("สถานที่นี้ได้รับอนุมัติแล้ว");
+      }
+      const now = stamp();
+      place.platformModerationStatus = "PENDING_REVIEW";
+      place.platformSubmittedAt = now;
+      place.platformReviewedAt = null;
+      place.platformReviewedByUserId = null;
+      place.platformRejectionReason = null;
+      place.updatedAt = now;
+      audit(
+        db,
+        actor,
+        "PLACE_SUBMITTED_TO_PLATFORM",
+        "place",
+        place.id,
+        place.businessId,
+        { submittedAt: now },
+      );
+      return place;
+    });
+  }
+
+  async listPlatformPlaceSubmissions(
+    actor: Actor,
+    status?: Place["platformModerationStatus"],
+  ) {
+    assertSuperAdmin(actor);
+    const db = await readDb();
+    return db.places
+      .filter(
+        (item) =>
+          item.sourceType === "AGENT" &&
+          item.platformModerationStatus !== "NOT_SUBMITTED" &&
+          (!status || item.platformModerationStatus === status),
+      )
+      .sort((a, b) =>
+        (b.platformSubmittedAt ?? b.updatedAt).localeCompare(
+          a.platformSubmittedAt ?? a.updatedAt,
+        ),
+      );
+  }
+
+  async reviewPlatformPlace(
+    actor: Actor,
+    placeId: string,
+    input: { decision: "APPROVE" | "REJECT"; reason?: string | null },
+  ) {
+    assertSuperAdmin(actor);
+    return mutate((db) => {
+      const place = db.places.find(
+        (item) => item.id === placeId && item.sourceType === "AGENT",
+      );
+      if (!place) throw new DomainError("ไม่พบสถานที่ที่เสนอ");
+      if (place.platformModerationStatus !== "PENDING_REVIEW") {
+        throw new DomainError("ตรวจได้เฉพาะรายการที่กำลังรอตรวจสอบ");
+      }
+      const reason = input.reason?.trim() || null;
+      if (input.decision === "REJECT" && !reason) {
+        throw new DomainError("กรุณาระบุเหตุผลที่ไม่ผ่าน");
+      }
+      const now = stamp();
+      place.platformModerationStatus =
+        input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
+      place.platformReviewedAt = now;
+      place.platformReviewedByUserId = actor.userId;
+      place.platformRejectionReason =
+        input.decision === "REJECT" ? reason : null;
+      place.updatedAt = now;
+      audit(
+        db,
+        actor,
+        input.decision === "APPROVE"
+          ? "PLACE_PLATFORM_APPROVED"
+          : "PLACE_PLATFORM_REJECTED",
+        "place",
+        place.id,
+        place.businessId,
+        { reason },
+      );
+      return place;
+    });
+  }
+
   async updateBusinessProfile(
     actor: Actor,
     businessId: string,
@@ -2763,6 +3691,7 @@ export class LocalStore implements Store {
   async upsertPlace(actor: Actor, businessId: string, input: PlaceInput) {
     return mutate((db) => {
       assertBusinessAccess(actor, businessId);
+      assertStorePermission(db, actor, businessId, "BRANDING_MANAGE");
       const business = db.businesses.find((item) => item.id === businessId);
       if (!business) throw new DomainError("ไม่พบร้าน");
       const cleaned = sanitizePlaceImages({
@@ -2776,6 +3705,10 @@ export class LocalStore implements Store {
       if (input.id) {
         const place = db.places.find((item) => item.id === input.id && item.businessId === businessId);
         if (!place) throw new TenantIsolationError("แก้ได้เฉพาะสถานที่ของร้าน");
+        const approvedFingerprint =
+          place.platformModerationStatus === "APPROVED"
+            ? placeModerationFingerprint(place)
+            : null;
         Object.assign(place, {
           category: input.category,
           name: input.name,
@@ -2795,6 +3728,25 @@ export class LocalStore implements Store {
           status: input.status,
           updatedAt: stamp(),
         });
+        if (
+          approvedFingerprint &&
+          approvedFingerprint !== placeModerationFingerprint(place)
+        ) {
+          place.platformModerationStatus = "NOT_SUBMITTED";
+          place.platformSubmittedAt = null;
+          place.platformReviewedAt = null;
+          place.platformReviewedByUserId = null;
+          place.platformRejectionReason = null;
+          audit(
+            db,
+            actor,
+            "PLACE_PLATFORM_APPROVAL_INVALIDATED",
+            "place",
+            place.id,
+            businessId,
+            { reason: "material_agent_edit" },
+          );
+        }
         audit(db, actor, "place.upsert", "place", place.id, businessId, { name: place.name });
         return place;
       }
@@ -2832,7 +3784,7 @@ export class LocalStore implements Store {
     return mutate((db) => {
       const place = db.places.find((item) => item.id === placeId);
       if (!place || !place.businessId) throw new TenantIsolationError("แก้ได้เฉพาะสถานที่ของร้าน");
-      assertBusinessAccess(actor, place.businessId);
+      assertStorePermission(db, actor, place.businessId, "BRANDING_MANAGE");
       place.status = active ? "ACTIVE" : "HIDDEN";
       audit(db, actor, "place.active", "place", place.id, place.businessId, { active });
       return place;
@@ -2844,7 +3796,7 @@ export class LocalStore implements Store {
     return mutate((db) => {
       const place = db.places.find((item) => item.id === placeId);
       if (!place || !place.businessId) throw new TenantIsolationError("แก้ได้เฉพาะสถานที่ของร้าน");
-      assertBusinessAccess(actor, place.businessId);
+      assertStorePermission(db, actor, place.businessId, "BRANDING_MANAGE");
       const referenced =
         db.bookings.some(
           (booking) =>
@@ -2910,9 +3862,11 @@ export class LocalStore implements Store {
   async createTripPackage(actor: Actor, businessId: string, input: TripPackageWriteInput) {
     return mutate((db) => {
       assertBusinessAccess(actor, businessId);
+      assertStorePermission(db, actor, businessId, "BRANDING_MANAGE");
       assertTripPackagesEntitlement(db, businessId);
       const now = stamp();
       const normalized = normalizeTripPackageWrite(input);
+      assertTripPackagePlaceReferences(db, businessId, normalized.itinerary);
       const pkg: TripPackage = {
         id: newId(),
         businessId,
@@ -2936,8 +3890,10 @@ export class LocalStore implements Store {
     return mutate((db) => {
       const pkg = requireTripPackage(db, id);
       assertBusinessAccess(actor, pkg.businessId);
+      assertStorePermission(db, actor, pkg.businessId, "BRANDING_MANAGE");
       assertTripPackagesEntitlement(db, pkg.businessId);
       const next = applyTripPackagePatch(pkg, input);
+      assertTripPackagePlaceReferences(db, pkg.businessId, next.itinerary);
       Object.assign(pkg, next, { updatedAt: stamp() });
       audit(db, actor, "trip_package.update", "trip_package", pkg.id, pkg.businessId, {
         fields: Object.keys(input),
@@ -2950,6 +3906,7 @@ export class LocalStore implements Store {
     return mutate((db) => {
       const pkg = requireTripPackage(db, id);
       assertBusinessAccess(actor, pkg.businessId);
+      assertStorePermission(db, actor, pkg.businessId, "BRANDING_MANAGE");
       assertTripPackagesEntitlement(db, pkg.businessId);
       applyTripPackageStatus(pkg, status);
       audit(db, actor, "trip_package.status", "trip_package", pkg.id, pkg.businessId, {
@@ -4112,6 +5069,25 @@ function requireTripPackage(db: Db, id: string): TripPackage {
   return pkg;
 }
 
+function assertTripPackagePlaceReferences(
+  db: Db,
+  businessId: string,
+  itinerary: TripPackage["itinerary"],
+) {
+  const business = db.businesses.find((item) => item.id === businessId);
+  if (!business) throw new DomainError("ไม่พบร้าน");
+  for (const placeId of new Set(
+    itinerary.flatMap((day) => day.stops.map((stop) => stop.placeId).filter(Boolean)),
+  )) {
+    const place = db.places.find((item) => item.id === placeId);
+    const allowed =
+      place &&
+      (place.businessId === businessId ||
+        (place.businessId === null && place.provinceId === business.provinceId));
+    if (!allowed) throw new TenantIsolationError("สถานที่ในแพ็กเกจไม่อยู่ในขอบเขตร้าน");
+  }
+}
+
 function normalizeLocalizedText(
   value: { th?: string; en?: string; zh?: string } | null | undefined,
   requiredTh: boolean,
@@ -4174,11 +5150,20 @@ function normalizeTripPackageWrite(input: TripPackageWriteInput) {
   const nights = Math.max(0, Math.floor(input.nights) || 0);
   const passengerMin = Math.max(1, Math.floor(input.passengerMin) || 1);
   const passengerMax = Math.max(passengerMin, Math.floor(input.passengerMax) || passengerMin);
-  const quoteFirst = input.quoteFirst !== false;
-  const startingPrice =
-    quoteFirst || input.startingPrice == null
-      ? null
-      : Math.max(0, Number(input.startingPrice) || 0);
+  const pricingMode = TRIP_PACKAGE_PRICING_MODES.includes(input.pricingMode)
+    ? input.pricingMode
+    : "QUOTE_FIRST";
+  const rawPrice = input.priceAmount;
+  const priceAmount =
+    pricingMode === "QUOTE_FIRST" ? null : Number(rawPrice);
+  if (
+    pricingMode !== "QUOTE_FIRST" &&
+    (typeof priceAmount !== "number" ||
+      !Number.isInteger(priceAmount) ||
+      priceAmount <= 0)
+  ) {
+    throw new DomainError("กรุณาระบุราคาเป็นจำนวนเต็มมากกว่า 0 บาท");
+  }
   const galleryImageUrls = Array.isArray(input.galleryImageUrls)
     ? input.galleryImageUrls.filter((url) => typeof url === "string" && url.trim()).slice(0, 12)
     : [];
@@ -4190,8 +5175,8 @@ function normalizeTripPackageWrite(input: TripPackageWriteInput) {
     passengerMin,
     passengerMax,
     vehicleCategoryHint: input.vehicleCategoryHint?.trim() || null,
-    startingPrice,
-    quoteFirst: quoteFirst || startingPrice == null,
+    pricingMode,
+    priceAmount,
     coverImageUrl,
     galleryImageUrls,
     title: normalizeLocalizedText(input.title, true),
@@ -4215,8 +5200,8 @@ function applyTripPackagePatch(pkg: TripPackage, input: TripPackageUpdateInput) 
     passengerMax: input.passengerMax ?? pkg.passengerMax,
     vehicleCategoryHint:
       input.vehicleCategoryHint !== undefined ? input.vehicleCategoryHint : pkg.vehicleCategoryHint,
-    startingPrice: input.startingPrice !== undefined ? input.startingPrice : pkg.startingPrice,
-    quoteFirst: input.quoteFirst ?? pkg.quoteFirst,
+    pricingMode: input.pricingMode ?? pkg.pricingMode,
+    priceAmount: input.priceAmount !== undefined ? input.priceAmount : pkg.priceAmount,
     coverImageUrl: input.coverImageUrl !== undefined ? input.coverImageUrl : pkg.coverImageUrl,
     galleryImageUrls:
       input.galleryImageUrls !== undefined ? input.galleryImageUrls : pkg.galleryImageUrls,
@@ -4528,6 +5513,32 @@ function hydrateBooking(db: Db, booking: Booking): BookingRecord {
 
 export const localStore = new LocalStore();
 
+export async function restoreHomepageWorkspaceForTests(
+  workspace: HomepageWorkspace,
+): Promise<void> {
+  await mutate((db) => {
+    db.homepageWorkspace = structuredClone(workspace);
+  });
+}
+
+export async function purgeTestAgentPlaces(namePrefix: string): Promise<void> {
+  await mutate((db) => {
+    const ids = new Set(
+      db.places
+        .filter(
+          (place) =>
+            place.sourceType === "AGENT" &&
+            place.name.startsWith(namePrefix),
+        )
+        .map((place) => place.id),
+    );
+    db.places = db.places.filter((place) => !ids.has(place.id));
+    db.auditLogs = db.auditLogs.filter(
+      (log) => log.entityType !== "place" || !log.entityId || !ids.has(log.entityId),
+    );
+  });
+}
+
 export async function purgeCustomerAuthFixtures(phonePrefix: string) {
   return mutate((db) => {
     const accounts = db.customerAccounts.filter(
@@ -4591,6 +5602,71 @@ export async function purgeTestPaymentAccounts(displayNamePrefix: string) {
     const before = db.paymentAccounts.length;
     db.paymentAccounts = db.paymentAccounts.filter((item) => !item.displayName.startsWith(displayNamePrefix));
     return before - db.paymentAccounts.length;
+  });
+}
+
+export async function purgeTestTripPackages(titlePrefix: string) {
+  return mutate((db) => {
+    const ids = new Set(
+      db.tripPackages
+        .filter((item) => item.title.th.startsWith(titlePrefix))
+        .map((item) => item.id),
+    );
+    db.tripPackages = db.tripPackages.filter((item) => !ids.has(item.id));
+    db.auditLogs = db.auditLogs.filter(
+      (item) => item.entityType !== "trip_package" || !ids.has(item.entityId ?? ""),
+    );
+    return ids.size;
+  });
+}
+
+export async function purgeTestMerchants(emailPrefix: string) {
+  return mutate((db) => {
+    const userIds = new Set(
+      db.profiles
+        .filter((item) => item.email.startsWith(emailPrefix))
+        .map((item) => item.id),
+    );
+    const businessIds = new Set(
+      db.businessUsers
+        .filter((item) => userIds.has(item.userId))
+        .map((item) => item.businessId),
+    );
+    const subscriptionIds = new Set(
+      db.saasSubscriptions
+        .filter((item) => businessIds.has(item.businessId))
+        .map((item) => item.id),
+    );
+    const billingPeriodIds = new Set(
+      db.saasBillingPeriods
+        .filter((item) => businessIds.has(item.businessId))
+        .map((item) => item.id),
+    );
+    db.profiles = db.profiles.filter((item) => !userIds.has(item.id));
+    db.businessUsers = db.businessUsers.filter(
+      (item) => !businessIds.has(item.businessId),
+    );
+    db.businesses = db.businesses.filter((item) => !businessIds.has(item.id));
+    db.settings = db.settings.filter((item) => !businessIds.has(item.businessId));
+    db.saasSubscriptions = db.saasSubscriptions.filter(
+      (item) => !subscriptionIds.has(item.id),
+    );
+    db.saasBillingPeriods = db.saasBillingPeriods.filter(
+      (item) => !billingPeriodIds.has(item.id),
+    );
+    db.saasPaymentProofs = db.saasPaymentProofs.filter(
+      (item) => !businessIds.has(item.businessId),
+    );
+    db.saasPayments = db.saasPayments.filter(
+      (item) => !businessIds.has(item.businessId),
+    );
+    db.merchantProvisionings = db.merchantProvisionings.filter(
+      (item) => !businessIds.has(item.businessId),
+    );
+    db.auditLogs = db.auditLogs.filter(
+      (item) => !item.businessId || !businessIds.has(item.businessId),
+    );
+    return businessIds.size;
   });
 }
 

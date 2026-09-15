@@ -268,6 +268,7 @@ export function buildBookingSubmitPayload(
   const payload: BookingSubmitPayload = {
     businessSlug: slug,
     clientRequestId: options?.clientRequestId ?? bookingRequestId(),
+    tripPackageId: normalized.tripPackageId,
     serviceType: normalized.serviceType,
     startDate: normalized.startDate,
     startTime,

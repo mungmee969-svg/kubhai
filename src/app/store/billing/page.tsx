@@ -15,6 +15,7 @@ import {
   SAAS_PLAN_CHANGE_NOTICE_TH,
   listSaasPlanAnnouncements,
 } from "@/lib/domain/saas-plans";
+import { SaasPaymentForm } from "@/components/store-admin/SaasPaymentForm";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,28 @@ export default async function StoreBillingPage() {
   const current = catalogEntryForSubscription(ctx.business.subscriptionPlan);
   const payment = resolveKubHaiSaasPaymentConfig();
   const announcements = listSaasPlanAnnouncements();
+  const billing = await ctx.store.getSaasBillingAccount(ctx.actor, ctx.businessId);
+  const currentBill =
+    billing.billingPeriods.find((item) =>
+      ["PENDING", "REJECTED", "OVERDUE", "AWAITING_REVIEW"].includes(item.status),
+    ) ?? null;
+  const statusLabel = {
+    PENDING: "รอชำระ",
+    AWAITING_REVIEW: "รอตรวจสอบ",
+    PAID: "ชำระแล้ว",
+    REJECTED: "ไม่ผ่าน",
+    OVERDUE: "เกินกำหนด",
+    CANCELLED: "ยกเลิก",
+  } as const;
+  const subscriptionLabel = {
+    PENDING_PAYMENT: "รอชำระ",
+    ACTIVE: "ใช้งานอยู่",
+    PAST_DUE: "เกินกำหนด",
+    SUSPENDED: "ระงับ",
+    CANCELLED: "ยกเลิก",
+  } as const;
+  const date = (value: string | null) =>
+    value ? new Date(value).toLocaleDateString("th-TH") : "ยังไม่มีข้อมูล";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -73,7 +96,12 @@ export default async function StoreBillingPage() {
               {formatPlanPriceThb(current.priceMonthlyThb)}{" "}
               <span className="text-sm font-normal text-muted">/ เดือน</span>
             </p>
-            <p className="mt-2 text-sm text-success">สถานะ: ใช้งานอยู่</p>
+            <p className="mt-2 text-sm text-success">
+              สถานะ:{" "}
+              {billing.subscription
+                ? subscriptionLabel[billing.subscription.status]
+                : "ยังไม่มี Subscription"}
+            </p>
           </div>
           <span className="rounded-full bg-navy-800 px-3 py-1 text-xs font-semibold text-white">
             แพ็กเกจปัจจุบัน
@@ -88,6 +116,49 @@ export default async function StoreBillingPage() {
           สิทธิ์ระบบ: {planId}
           {planId === "enterprise" ? " (แสดงในกลุ่ม Business สำหรับราคา 3 แพ็กเกจ)" : ""}
         </p>
+      </section>
+
+      <section className="rounded-2xl bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-navy-800">รอบบิลปัจจุบัน</h2>
+        {currentBill ? (
+          <div className="mt-3 space-y-3">
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <p>
+                แพ็กเกจ: <strong>{currentBill.planNameSnapshot}</strong>
+              </p>
+              <p>
+                สถานะ: <strong>{statusLabel[currentBill.status]}</strong>
+              </p>
+              <p>
+                รอบบริการ: {date(currentBill.periodStart)} –{" "}
+                {date(currentBill.periodEnd)}
+              </p>
+              <p>ครบกำหนด: {date(currentBill.dueAt)}</p>
+              <p>
+                ยอดที่ต้องชำระ:{" "}
+                <strong>{formatPlanPriceThb(currentBill.amountThb)}</strong>
+              </p>
+              <p>
+                ชำระเมื่อ: {date(currentBill.paidAt)}
+              </p>
+            </div>
+            {currentBill.status === "AWAITING_REVIEW" ? (
+              <p className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-navy-800">
+                ส่งหลักฐานแล้วและกำลังรอผู้ดูแลแพลตฟอร์มตรวจสอบ
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted">
+            ยังไม่มีรอบบิลที่ต้องชำระ ระบบจะไม่สร้างวันครบกำหนดหรือยอดย้อนหลังขึ้นเอง
+          </p>
+        )}
+        {billing.subscription ? (
+          <p className="mt-3 text-xs text-muted">
+            วันสิ้นสุดสิทธิ์ปัจจุบัน: {date(billing.subscription.currentPeriodEnd)} ·
+            ครบกำหนดถัดไป: {date(billing.subscription.nextDueAt)}
+          </p>
+        ) : null}
       </section>
 
       <section className="space-y-3">
@@ -162,6 +233,13 @@ export default async function StoreBillingPage() {
               <img src={payment.promptPayQrUrl} alt="QR ชำระค่าบริการระบบ" className="mt-2 h-40 w-40 object-contain" />
             ) : null}
             {payment.note ? <p className="text-xs text-muted">{payment.note}</p> : null}
+            {currentBill &&
+            ["PENDING", "REJECTED", "OVERDUE"].includes(currentBill.status) ? (
+              <SaasPaymentForm
+                billingPeriodId={currentBill.id}
+                amountThb={currentBill.amountThb}
+              />
+            ) : null}
           </div>
         ) : (
           <p className="mt-4 rounded-xl bg-paper px-4 py-3 text-sm text-muted">
@@ -172,7 +250,45 @@ export default async function StoreBillingPage() {
 
       <section className="rounded-2xl bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-navy-800">ประวัติการชำระค่าระบบ</h2>
-        <p className="mt-3 text-sm text-muted">ยังไม่มีรายการชำระในระบบ — จะแสดงเมื่อมีการบันทึกจริง</p>
+        {billing.paymentProofs.length ? (
+          <div className="mt-3 space-y-3">
+            {billing.paymentProofs.map((proof) => {
+              const period = billing.billingPeriods.find(
+                (item) => item.id === proof.billingPeriodId,
+              );
+              const paid = billing.payments.find(
+                (item) => item.paymentProofId === proof.id,
+              );
+              return (
+                <article key={proof.id} className="rounded-xl bg-paper p-3 text-sm">
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <p className="font-medium text-navy-800">
+                      {period?.planNameSnapshot ?? "ค่าบริการ KubHai"}
+                    </p>
+                    <p>{proof.status === "APPROVED" ? "ชำระแล้ว" : proof.status === "REJECTED" ? "ไม่ผ่าน" : "รอตรวจสอบ"}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-muted">
+                    รอบ {date(period?.periodStart ?? null)} – {date(period?.periodEnd ?? null)} ·{" "}
+                    {formatPlanPriceThb(proof.submittedAmountThb)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    ส่ง {date(proof.submittedAt)} · อนุมัติ {date(proof.reviewedAt)}
+                    {paid ? ` · อ้างอิง ${paid.reference}` : ""}
+                  </p>
+                  {proof.rejectionReason ? (
+                    <p className="mt-1 text-xs text-danger">
+                      เหตุผล: {proof.rejectionReason}
+                    </p>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted">
+            ยังไม่มีรายการชำระในระบบ — จะแสดงเมื่อมีการบันทึกจริง
+          </p>
+        )}
       </section>
 
       {announcements.length ? (

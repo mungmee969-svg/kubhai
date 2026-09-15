@@ -320,6 +320,16 @@ export async function setPlaceActiveAction(placeId: string, active: boolean): Pr
   }
 }
 
+export async function submitPlaceForPlatformAction(placeId: string): Promise<OpsResult> {
+  try {
+    await getStore().submitPlaceForPlatform(await actor(), placeId);
+    revalidatePath("/store/places");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function archivePlaceAction(placeId: string): Promise<OpsResult> {
   try {
     await getStore().archivePlace(await actor(), placeId);

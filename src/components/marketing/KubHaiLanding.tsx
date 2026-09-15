@@ -1,25 +1,19 @@
 import Image from "next/image";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand/BrandMark";
-import { HomeDiscovery } from "@/components/discovery/HomeDiscovery";
-import { PlaceRail } from "@/components/discovery/PlaceCard";
-import {
-  IconCar,
-  IconPin,
-  IconPlane,
-  IconPlan,
-  IconRoute,
-  IconSteps,
-  IconStore,
-} from "@/components/marketing/icons";
-import { groupDiscoveryRails } from "@/lib/domain/discovery";
-import { DISCOVERY_HERO_IMAGE } from "@/lib/domain/place-image";
+import { platformLoginHref } from "@/lib/auth/customer-auth-links";
+import { groupDiscoveryRails, placeShortText } from "@/lib/domain/discovery";
 import {
   PARTNER_SERVICE_TYPE_LABELS,
   type PartnerServiceType,
 } from "@/lib/domain/partner-types";
+import { resolvePlaceImageUrl } from "@/lib/domain/place-image";
 import { storefrontPath } from "@/lib/domain/storefront-url";
-import { platformLoginHref } from "@/lib/auth/customer-auth-links";
+import {
+  splitHomepageLines,
+  type HomepageConfig,
+  type HomepageCategoryId,
+} from "@/lib/domain/homepage-cms";
 import type { Place } from "@/lib/domain/types";
 
 export type FeaturedStoreCard = {
@@ -32,336 +26,527 @@ export type FeaturedStoreCard = {
   partnerServiceTypes: PartnerServiceType[];
 };
 
-const TRAVEL_SHORTCUTS = [
-  { href: "/places?province=chiang-mai&category=ATTRACTION", label: "ที่เที่ยว", hint: "เที่ยว" },
-  { href: "/places?province=chiang-mai&category=RESTAURANT", label: "ร้านอาหาร", hint: "กิน" },
-  { href: "/places?province=chiang-mai&category=CAFE", label: "คาเฟ่", hint: "คาเฟ่" },
-  { href: "/places?province=chiang-mai&category=HOTEL", label: "ที่พัก", hint: "พัก" },
-  { href: "/places?province=chiang-mai&category=SHOPPING", label: "ช้อป / ของฝาก", hint: "ช้อป" },
-  { href: "/places?province=chiang-mai&category=RELAXATION", label: "พักผ่อน", hint: "พักผ่อน" },
-] as const;
-
-const MOBILITY_SHORTCUTS = [
-  { href: "/stores", label: "รถพร้อมคนขับ", Icon: IconCar },
-  { href: "/stores", label: "รับส่งสนามบิน", Icon: IconPlane },
-  { href: "/stores", label: "เช่ารถขับเอง", Icon: IconRoute },
-  { href: "/stores", label: "เช่ามอเตอร์ไซค์", Icon: IconPin },
-] as const;
-
-const SEARCH_HINTS = [
-  "รีวิวเชียงใหม่",
-  "คาเฟ่เชียงใหม่วิวภูเขา",
-  "คืนนี้ไปไหนดี",
-  "ที่เที่ยวเชียงใหม่กลางคืน",
-] as const;
-
-const TRIPS = [
-  { title: "เชียงใหม่ 1 วัน", subtitle: "เที่ยวในเมืองแบบสบาย ๆ" },
-  { title: "เชียงใหม่ 2 วัน", subtitle: "เมือง + คาเฟ่ + ธรรมชาติ" },
-  { title: "เชียงใหม่ยามค่ำคืน", subtitle: "กิน เที่ยว เดินเล่นช่วงเย็น" },
-  { title: "เที่ยวหลายวัน", subtitle: "ให้พาร์ทเนอร์ช่วยวางแผน" },
-] as const;
-
-const BENEFITS = [
-  {
-    title: "ค้นพบก่อน แล้วค่อยเดินทาง",
-    text: "ที่เที่ยว ร้านอาหาร คาเฟ่ ที่พัก และของฝาก — ก่อนเลือกรถจากพาร์ทเนอร์",
-    Icon: IconPlan,
-  },
-  {
-    title: "เลือกร้านพาร์ทเนอร์ได้",
-    text: "KubHai เป็นแพลตฟอร์มค้นหา — บริการจริงมาจากร้านที่คุณเลือก",
-    Icon: IconStore,
-  },
-  {
-    title: "ส่งคำขอให้ร้าน",
-    text: "ร้านตรวจสอบและส่งข้อเสนอก่อนยืนยัน — จ่ายตรงกับพาร์ทเนอร์",
-    Icon: IconSteps,
-  },
-] as const;
+const CATEGORY_ICONS: Record<HomepageCategoryId, string> = {
+  attractions: "⌁",
+  restaurants: "◌",
+  cafes: "☕",
+  transport: "◆",
+};
 
 export function KubHaiLanding({
-  store,
+  config,
+  storeNamesById,
+  stores,
   places,
   provinceId,
 }: {
-  store: FeaturedStoreCard;
+  config: HomepageConfig;
+  storeNamesById: Record<string, string>;
+  stores: FeaturedStoreCard[];
   places: Place[];
   provinceId: string;
 }) {
-  const storeHref = storefrontPath(store.slug);
-  const cover = store.coverUrl && !store.coverUrl.startsWith("/discovery/") ? store.coverUrl : DISCOVERY_HERO_IMAGE;
-  const logo = store.logoUrl || "/brand/pond-logo.jpg";
-  const rails = groupDiscoveryRails(places, provinceId);
-  const partnerTags = store.partnerServiceTypes
-    .slice(0, 4)
-    .map((t) => PARTNER_SERVICE_TYPE_LABELS[t]);
+  const rails = groupDiscoveryRails(
+    places.filter((place) => place.sourceType === "PLATFORM"),
+    provinceId,
+  );
+  const automaticRecommendations = uniquePlaces([
+    ...rails.attractions.slice(0, 2),
+    ...rails.restaurants.slice(0, 2),
+    ...rails.cafes.slice(0, 2),
+    ...rails.day,
+  ]).slice(0, 6);
+  const recommendations = config.recommended.useAutomaticSelection
+    ? automaticRecommendations
+    : config.recommended.placeIds
+        .map((id) => places.find((place) => place.id === id))
+        .filter((place): place is Place => Boolean(place));
 
   return (
-    <div className="kh-landing min-h-dvh bg-[#f6f3ee] text-navy-950">
-      <section className="relative isolate overflow-hidden">
-        <div className="relative min-h-[min(92dvh,760px)] w-full md:min-h-[560px] lg:min-h-[640px]">
-          <Image
-            src={DISCOVERY_HERO_IMAGE}
-            alt="บรรยากาศเที่ยวภาคเหนือ"
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover object-center"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-navy-950/70 via-navy-900/40 to-navy-950/85 md:bg-gradient-to-r md:from-navy-950/88 md:via-navy-900/50 md:to-navy-950/30" />
+    <div className="min-h-dvh overflow-x-clip bg-[#f8f3e9] text-[#082747]">
+      <Hero config={config.hero} />
+      {config.search.enabled ? <DiscoverySearch config={config.search} /> : null}
 
-          <div className="relative z-10 mx-auto flex h-full w-full max-w-[1280px] flex-col px-4 pb-6 pt-4 sm:px-6 md:pb-10 md:pt-6 lg:px-8">
-            <header className="flex items-center justify-between gap-3">
-              <Link href="/" className="flex items-center gap-2.5">
-                <BrandMark size={40} priority className="shadow-lg ring-1 ring-white/25" />
-                <span className="text-[1.05rem] font-semibold tracking-tight text-white">
-                  KubHai
-                  <span className="ml-1.5 text-sm font-medium text-white/70">ขับให้</span>
-                </span>
-              </Link>
-              <Link
-                href={platformLoginHref()}
-                className="inline-flex h-10 items-center rounded-full bg-white/12 px-4 text-sm font-medium text-white backdrop-blur-md ring-1 ring-white/20 transition hover:bg-white/18"
-              >
-                เข้าสู่ระบบ
-              </Link>
-            </header>
-
-            <div className="mt-auto grid gap-6 pt-14 md:mt-14 md:grid-cols-[1.05fr_0.95fr] md:items-end md:gap-8 md:pt-16 lg:gap-10 lg:pt-20">
-              <div className="max-w-xl animate-[kh-rise_700ms_ease-out]">
-                <p className="text-sm font-medium tracking-wide text-accent">เที่ยว • กิน • ช้อป • พัก • เดินทาง</p>
-                <h1 className="mt-3 text-[2.05rem] font-semibold leading-[1.15] tracking-tight text-white sm:text-5xl lg:text-[3.2rem]">
-                  เที่ยวเหนือ ไปกับขับให้
-                </h1>
-                <p className="mt-3 max-w-md text-base leading-relaxed text-white/80 sm:text-lg">
-                  ค้นหาที่เที่ยว ร้านอาหาร คาเฟ่ ที่พัก และบริการเดินทางจากพาร์ทเนอร์ในพื้นที่
-                </p>
-              </div>
-              <DiscoveryPanel className="animate-[kh-rise_850ms_ease-out]" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <main className="relative z-10 space-y-2">
-        <section className="mx-auto w-full max-w-[1280px] px-4 py-8 sm:px-6 lg:px-8">
-          <p className="text-sm font-medium text-accent-deep">วันนี้สนใจอะไร</p>
-          <div className="mt-3 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-            {TRAVEL_SHORTCUTS.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="inline-flex h-11 shrink-0 items-center rounded-full bg-white px-4 text-sm font-semibold text-navy-900 ring-1 ring-navy-950/8 transition hover:bg-navy-800 hover:text-white"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-          <div className="mt-3 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-            {MOBILITY_SHORTCUTS.map(({ href, label, Icon }) => (
-              <Link
-                key={label}
-                href={href}
-                className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-navy-800/95 px-4 text-sm font-semibold text-white transition hover:bg-navy-700"
-              >
-                <Icon className="h-4 w-4 text-accent" />
-                {label}
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="mx-auto w-full max-w-[1280px] space-y-10 px-4 py-4 sm:px-6 lg:px-8">
-          <HomeDiscovery places={places} provinceId={provinceId} />
-          <PlaceRail title="วันนี้เที่ยวไหนดี" href="/places?province=chiang-mai&period=DAY" places={rails.day} />
-          <PlaceRail title="คืนนี้ไปไหนดี" href="/places?province=chiang-mai&period=NIGHT" places={rails.night} />
-          <PlaceRail title="ร้านอาหารน่าไป" href="/places?province=chiang-mai&category=RESTAURANT" places={rails.restaurants} />
-          <PlaceRail title="คาเฟ่น่าแวะ" href="/places?province=chiang-mai&category=CAFE" places={rails.cafes} />
-          <PlaceRail title="ที่พัก" href="/places?province=chiang-mai&category=HOTEL" places={rails.hotels} />
-          <PlaceRail title="พักผ่อน" href="/places?province=chiang-mai&category=RELAXATION" places={rails.relaxation} />
-          <PlaceRail title="ช้อป / ของฝาก" href="/places?province=chiang-mai&category=SHOPPING" places={[...rails.shopping, ...rails.souvenirs]} />
-          <PlaceRail title="กิจกรรม" href="/places?province=chiang-mai&category=ACTIVITY" places={rails.activities} />
-        </section>
-
-        <section className="mx-auto w-full max-w-[1280px] px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-accent-deep">เชียงใหม่</p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-navy-900 sm:text-3xl">
-                พาร์ทเนอร์เดินทาง
-              </h2>
-              <p className="mt-1.5 text-sm text-muted">บริการจากร้านพาร์ทเนอร์ — ไม่ใช่รถของ KubHai เอง</p>
-            </div>
-            <Link href="/stores" className="shrink-0 text-sm font-medium text-navy-700 underline-offset-4 hover:underline">
-              ดูทั้งหมด
-            </Link>
-          </div>
-
-          <Link
-            href={storeHref}
-            className="group mt-5 block overflow-hidden rounded-[1.75rem] bg-white shadow-[0_18px_50px_-28px_rgba(1,36,79,0.45)] ring-1 ring-navy-950/5 transition duration-300 hover:-translate-y-0.5"
-          >
-            <div className="relative aspect-[16/10] overflow-hidden sm:aspect-[21/9]">
-              <Image src={cover} alt={store.name} fill sizes="(max-width: 768px) 100vw, 1200px" className="object-cover transition duration-500 group-hover:scale-[1.03]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-navy-950/80 via-navy-950/15 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3 sm:bottom-6 sm:left-6 sm:right-6">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="relative h-12 w-12 overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-white/40">
-                    <Image src={logo} alt="" fill sizes="48px" className="object-cover" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-accent">พาร์ทเนอร์</p>
-                    <p className="truncate text-lg font-semibold text-white sm:text-xl">{store.name}</p>
-                    <p className="text-sm text-white/75">{store.provinceName}</p>
-                  </div>
-                </div>
-                <span className="hidden rounded-full bg-accent px-4 py-2 text-sm font-semibold text-navy-950 sm:inline-flex">
-                  ดูบริการ
-                </span>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 px-4 py-4 sm:px-6">
-              {(partnerTags.length ? partnerTags : ["รถพร้อมคนขับ"]).map((badge) => (
-                <span key={badge} className="rounded-full bg-navy-800/5 px-3 py-1.5 text-xs font-medium text-navy-800">
-                  {badge}
-                </span>
-              ))}
-              <span className="ml-auto text-sm font-semibold text-accent-deep sm:hidden">ดูบริการ</span>
-            </div>
-          </Link>
-        </section>
-
-        <section className="mx-auto w-full max-w-[1280px] px-4 py-10 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-semibold tracking-tight text-navy-900 sm:text-3xl">ทริปแนะนำ</h2>
-          <p className="mt-2 text-sm text-muted">แรงบันดาลใจสำหรับวางแผน — ไม่ใช่แพ็กเกจสำเร็จรูป</p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {TRIPS.map((trip, index) => (
-              <Link
-                key={trip.title}
-                href={storeHref}
-                className="group relative overflow-hidden rounded-[1.5rem] bg-navy-800 p-5 text-white shadow-sm transition hover:bg-navy-700"
-              >
-                <div
-                  className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full opacity-30"
-                  style={{
-                    background:
-                      index % 2 === 0
-                        ? "radial-gradient(circle, #fcad12, transparent 70%)"
-                        : "radial-gradient(circle, #4fd1c5, transparent 70%)",
-                  }}
-                />
-                <p className="text-lg font-semibold">{trip.title}</p>
-                <p className="mt-1 text-sm text-white/70">{trip.subtitle}</p>
-                <span className="mt-6 inline-flex text-sm font-semibold text-accent transition group-hover:translate-x-0.5">
-                  เริ่มวางแผนทริป →
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="border-y border-navy-950/5 bg-white/70">
-          <div className="mx-auto w-full max-w-[1280px] px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-            <h2 className="max-w-lg text-2xl font-semibold tracking-tight text-navy-900 sm:text-3xl">
-              เที่ยวเชียงใหม่ง่ายขึ้นกับ KubHai
-            </h2>
-            <ul className="mt-8 grid gap-4 sm:grid-cols-3 sm:gap-5">
-              {BENEFITS.map(({ title, text, Icon }) => (
-                <li key={title} className="rounded-[1.5rem] bg-[#f6f3ee] p-5 ring-1 ring-navy-950/5">
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-navy-800 text-accent">
-                    <Icon />
-                  </span>
-                  <p className="mt-4 text-base font-semibold text-navy-900">{title}</p>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted">{text}</p>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-6 max-w-2xl text-sm text-muted">
-              สมัครสมาชิกครั้งเดียวบน KubHai แล้วใช้บัญชีเดียวกันกับพาร์ทเนอร์หลายร้าน — ไม่ต้องสมัครใหม่ทุกร้าน
-            </p>
-          </div>
-        </section>
-
-        <section className="mx-auto w-full max-w-[1280px] px-4 py-10 sm:px-6 lg:px-8 lg:pb-14">
-          <div className="overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-navy-900 via-navy-800 to-[#06314f] p-6 text-white sm:flex sm:items-center sm:justify-between sm:gap-8 sm:p-8">
-            <div className="max-w-xl">
-              <p className="text-lg font-semibold">มีบริการเดินทางในพื้นที่?</p>
-              <p className="mt-2 text-sm leading-relaxed text-white/75">
-                เปิดหน้าร้านพาร์ทเนอร์บน KubHai และจัดการคำขอจองของคุณ — รับชำระจากลูกค้าโดยตรง
-              </p>
-            </div>
-            <Link
-              href="/store/login"
-              className="mt-5 inline-flex h-12 shrink-0 items-center justify-center rounded-full bg-white px-5 text-sm font-semibold text-navy-900 transition hover:bg-accent sm:mt-0"
-            >
-              สำหรับพาร์ทเนอร์
-            </Link>
-          </div>
-        </section>
+      <main>
+        {config.sectionOrder.map((sectionId) => {
+          if (sectionId === "categories") {
+            return (
+              <CategorySection
+                key={sectionId}
+                categories={config.categories}
+                followsSearch={config.search.enabled}
+              />
+            );
+          }
+          if (sectionId === "recommended") {
+            return (
+              <RecommendedSection
+                key={sectionId}
+                config={config.recommended}
+                places={recommendations}
+                storeNamesById={storeNamesById}
+              />
+            );
+          }
+          return (
+            <TransportSection
+              key={sectionId}
+              config={config.agents}
+              stores={stores}
+            />
+          );
+        })}
       </main>
 
-      <footer className="border-t border-navy-950/8 bg-white">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 px-4 py-10 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:px-8">
-          <div className="flex items-center gap-2.5">
-            <BrandMark size={36} />
+      <footer className="relative isolate overflow-hidden bg-[#061d38] text-white">
+        <Image
+          src="/home/lanna-hero.jpg"
+          alt=""
+          fill
+          sizes="100vw"
+          className="object-cover object-bottom opacity-15"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#061d38] via-[#061d38]/95 to-[#061d38]/80" />
+        <div className="relative mx-auto flex w-full max-w-[1220px] flex-col gap-6 px-5 py-9 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
+          <div className="flex items-center gap-3">
+            <BrandMark size={42} className="ring-1 ring-white/30" />
             <div>
-              <p className="font-semibold text-navy-900">KubHai</p>
-              <p className="text-xs text-muted">ขับให้ · แพลตฟอร์มค้นหาเที่ยวและเดินทาง</p>
+              <p className="text-lg font-semibold leading-none">KubHai</p>
+              <p className="mt-1 text-xs tracking-wide text-white/60">ขับให้</p>
             </div>
           </div>
-          <nav className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm text-navy-800 sm:flex sm:flex-wrap sm:gap-x-8">
-            <Link href="/services">บริการ</Link>
-            <Link href="/province/chiang-mai">พื้นที่ให้บริการ</Link>
-            <Link href="/places?province=chiang-mai&category=ATTRACTION">ที่เที่ยว</Link>
-            <Link href="/places?province=chiang-mai&category=RESTAURANT">ร้านอาหาร</Link>
-            <Link href="/places?province=chiang-mai&category=CAFE">คาเฟ่</Link>
-            <Link href="/places?province=chiang-mai&category=HOTEL">ที่พัก</Link>
-            <Link href="/stores">พาร์ทเนอร์เดินทาง</Link>
-            <Link href={platformLoginHref()}>เข้าสู่ระบบ</Link>
-            <Link href="/store/login">เข้าสู่ระบบร้าน</Link>
-          </nav>
+          <div className="max-w-xl md:text-right">
+            <p className="text-base font-medium text-[#f6b52f]">“ขับให้...พาคุณไปได้ไกลกว่า”</p>
+            <p className="mt-1.5 text-sm text-white/65">
+              ค้นพบเรื่องราว สถานที่ และการเดินทางในแบบล้านนา
+            </p>
+          </div>
         </div>
       </footer>
     </div>
   );
 }
 
-function DiscoveryPanel({ className = "" }: { className?: string }) {
+function Hero({ config }: { config: HomepageConfig["hero"] }) {
+  const headlineLines = splitHomepageLines(config.headline);
+  const descriptionLines = splitHomepageLines(config.description);
+  return (
+    <section className="relative isolate min-h-[650px] overflow-hidden bg-[#071f3b] sm:min-h-[680px] lg:min-h-[700px]">
+      <Image
+        src={config.imageUrl}
+        alt="วัดล้านนาท่ามกลางขุนเขาและทะเลหมอกยามเช้า"
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover object-[64%_center] sm:object-center"
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#04182f]/85 via-[#071f3b]/25 to-[#071f3b]/90 lg:bg-gradient-to-r lg:from-[#04182f]/95 lg:via-[#071f3b]/60 lg:to-[#071f3b]/12" />
+
+      <div className="relative mx-auto flex min-h-[650px] w-full max-w-[1220px] flex-col px-5 sm:min-h-[680px] sm:px-8 lg:min-h-[700px] lg:px-10">
+        <PublicHeader />
+
+        <div className="flex flex-1 items-center py-16">
+          {config.enabled ? <div className="max-w-[650px]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f6b52f] sm:text-xs">
+              {config.eyebrow}
+            </p>
+            <h1 className="mt-5 text-[2.65rem] font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-6xl lg:text-[4.4rem]">
+              {headlineLines[0]}
+              {headlineLines.slice(1).map((line) => (
+                <span key={line} className="block text-[#ffc34b]">{line}</span>
+              ))}
+            </h1>
+            <p className="mt-5 max-w-[560px] text-base leading-7 text-white/82 sm:text-lg sm:leading-8">
+              {descriptionLines.map((line, index) => (
+                <span key={`${line}-${index}`} className="block">{line}</span>
+              ))}
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              {config.primaryCtaEnabled ? <Link
+                href={config.primaryCtaHref}
+                className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#f6ad22] px-6 text-sm font-semibold text-[#082747] shadow-[0_12px_30px_-14px_rgba(246,173,34,0.85)] transition hover:bg-[#ffc34b]"
+              >
+                {config.primaryCtaLabel}
+              </Link> : null}
+              {config.secondaryCtaEnabled ? <Link
+                href={config.secondaryCtaHref}
+                className="inline-flex min-h-12 items-center justify-center rounded-full bg-white/10 px-6 text-sm font-semibold text-white ring-1 ring-white/35 backdrop-blur-sm transition hover:bg-white/18"
+              >
+                {config.secondaryCtaLabel}
+              </Link> : null}
+            </div>
+          </div> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PublicHeader() {
+  const links = [
+    { href: "/", label: "หน้าแรก" },
+    { href: "/places?province=chiang-mai&category=ATTRACTION", label: "ที่เที่ยว" },
+    { href: "/places?province=chiang-mai&category=RESTAURANT", label: "ร้านอาหาร" },
+    { href: "/stores", label: "บริการรถ" },
+  ];
+
+  return (
+    <header className="flex h-[76px] items-center justify-between gap-5 border-b border-white/15">
+      <Link href="/" aria-label="KubHai หน้าแรก" className="flex shrink-0 items-center gap-2.5">
+        <BrandMark size={42} priority className="ring-1 ring-white/30" />
+        <span className="text-lg font-semibold tracking-tight text-white">
+          KubHai <span className="text-xs font-medium text-white/65">ขับให้</span>
+        </span>
+      </Link>
+
+      <nav className="hidden items-center gap-7 lg:flex" aria-label="เมนูหลัก">
+        {links.map((item, index) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className={`border-b py-2 text-sm transition ${
+              index === 0
+                ? "border-[#f6ad22] font-semibold text-white"
+                : "border-transparent text-white/75 hover:text-white"
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="hidden items-center gap-2 sm:flex">
+        <Link
+          href={platformLoginHref()}
+          className="inline-flex h-10 items-center rounded-full px-4 text-sm font-medium text-white/80 transition hover:text-white"
+        >
+          เข้าสู่ระบบ
+        </Link>
+        <Link
+          href="/stores"
+          className="inline-flex h-10 items-center rounded-full bg-[#f6ad22] px-5 text-sm font-semibold text-[#082747] transition hover:bg-[#ffc34b]"
+        >
+          ค้นหารถ
+        </Link>
+      </div>
+
+      <details className="group relative sm:hidden">
+        <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/25">
+          <span className="sr-only">เปิดเมนู</span>
+          <span aria-hidden="true" className="text-xl leading-none">☰</span>
+        </summary>
+        <div className="absolute right-0 top-13 z-30 w-52 rounded-2xl bg-white p-2 text-[#082747] shadow-2xl">
+          {links.map((item) => (
+            <Link key={item.label} href={item.href} className="block rounded-xl px-3 py-2.5 text-sm hover:bg-[#f8f3e9]">
+              {item.label}
+            </Link>
+          ))}
+          <div className="my-1 border-t border-[#082747]/10" />
+          <Link href={platformLoginHref()} className="block rounded-xl px-3 py-2.5 text-sm hover:bg-[#f8f3e9]">
+            เข้าสู่ระบบ
+          </Link>
+          <Link href="/stores" className="mt-1 block rounded-xl bg-[#f6ad22] px-3 py-2.5 text-center text-sm font-semibold">
+            ค้นหารถ
+          </Link>
+        </div>
+      </details>
+    </header>
+  );
+}
+
+function DiscoverySearch({ config }: { config: HomepageConfig["search"] }) {
   return (
     <div
-      className={`rounded-[1.75rem] bg-white/95 p-4 shadow-[0_24px_60px_-20px_rgba(0,22,62,0.55)] ring-1 ring-white/40 backdrop-blur-md sm:p-5 ${className}`}
+      id="discover"
+      className="relative z-20 mx-auto -mt-16 mb-4 w-[calc(100%_-_2.5rem)] max-w-[1140px] rounded-[1.4rem] border border-[#082747]/10 bg-white p-4 shadow-[0_24px_60px_-24px_rgba(3,27,51,0.45)] sm:-mt-14 sm:mb-6 sm:w-[calc(100%_-_4rem)] sm:p-5"
     >
-      <p className="text-lg font-semibold text-navy-900">ค้นหาแรงบันดาลใจ</p>
-      <Link
-        href="/places?province=chiang-mai"
-        className="mt-3 flex h-12 items-center gap-2 rounded-2xl bg-[#f3efe8] px-4 text-sm text-navy-800 ring-1 ring-navy-950/5 transition hover:bg-[#ebe5db]"
-      >
-        <IconPin className="h-4 w-4 shrink-0 text-accent-deep" />
-        <span className="truncate text-muted">เช่น รีวิวคาเฟ่เชียงใหม่ / คืนนี้ไปไหนดี</span>
-      </Link>
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
-        {SEARCH_HINTS.map((hint) => (
-          <Link
-            key={hint}
-            href={`/places?province=chiang-mai&q=${encodeURIComponent(hint)}`}
-            className="rounded-full bg-navy-800/5 px-2.5 py-1 text-[11px] font-medium text-navy-800"
+      <form action="/places" className="grid gap-3 md:grid-cols-[1fr_180px_auto] md:items-end">
+        <input type="hidden" name="province" value={config.defaultAreaSlug} />
+        <label className="block">
+          <span className="mb-2 block text-xs font-semibold text-[#082747]/65">
+            {config.heading}
+          </span>
+          <span className="flex h-12 items-center rounded-xl bg-[#f8f3e9] px-4 ring-1 ring-[#082747]/8 focus-within:ring-[#d89311]">
+            <span aria-hidden="true" className="mr-2 text-[#d89311]">⌕</span>
+            <input
+              name="q"
+              type="search"
+              placeholder={config.placeholder}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#526476]/70"
+            />
+          </span>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-xs font-semibold text-[#082747]/65">พื้นที่</span>
+          <select
+            name="area"
+            defaultValue="chiang-mai"
+            className="h-12 w-full rounded-xl bg-[#f8f3e9] px-4 text-sm font-medium outline-none ring-1 ring-[#082747]/8"
           >
-            {hint}
+            <option value={config.defaultAreaSlug}>{config.defaultAreaLabel}</option>
+          </select>
+        </label>
+        <button
+          type="submit"
+          className="h-12 rounded-xl bg-[#f6ad22] px-7 text-sm font-semibold text-[#082747] transition hover:bg-[#ffc34b]"
+        >
+          ค้นหา
+        </button>
+      </form>
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5">
+        <span className="shrink-0 py-1 text-[11px] text-[#526476]">ค้นหายอดนิยม:</span>
+        {config.popularSearches.map((item) => (
+          <Link
+            key={item.label}
+            href={`/places?province=${encodeURIComponent(config.defaultAreaSlug)}&q=${encodeURIComponent(item.query)}`}
+            className="shrink-0 rounded-full bg-[#082747]/5 px-2.5 py-1 text-[11px] font-medium text-[#27425e] transition hover:bg-[#082747]/10"
+          >
+            {item.label}
           </Link>
         ))}
       </div>
-
-      <Link
-        href="/province/chiang-mai"
-        className="mt-3 flex h-11 items-center justify-between rounded-2xl bg-white px-4 text-sm font-medium text-navy-900 ring-1 ring-navy-950/8 transition hover:bg-[#f8f5f0]"
-      >
-        <span className="inline-flex items-center gap-2">
-          <IconPin className="h-4 w-4 text-accent-deep" />
-          เชียงใหม่
-        </span>
-        <span className="text-xs text-muted">ภาคเหนือ</span>
-      </Link>
     </div>
   );
+}
+
+function CategorySection({
+  categories,
+  followsSearch,
+}: {
+  categories: HomepageConfig["categories"];
+  followsSearch: boolean;
+}) {
+  const visibleCategories = categories.filter((item) => item.enabled);
+  if (!visibleCategories.length) return null;
+  return (
+    <section className={`mx-auto w-full max-w-[1220px] px-5 pb-14 sm:px-8 lg:px-10 ${followsSearch ? "pt-14 sm:pt-16" : "pt-14"}`}>
+      <div className="text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#c47e05]">Explore Lanna</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">วันนี้อยากไปไหนดี?</h2>
+      </div>
+      <div className="mt-7 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {visibleCategories.map((item) => (
+          <Link
+            key={item.title}
+            href={item.href}
+            className="group relative aspect-[4/5] overflow-hidden rounded-[1.35rem] bg-[#082747] shadow-[0_18px_35px_-24px_rgba(8,39,71,0.65)] sm:aspect-[4/3] lg:aspect-[5/4]"
+          >
+            <Image
+              src={item.imageUrl}
+              alt=""
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
+              className="object-cover transition duration-500 group-hover:scale-[1.04]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#04182f]/90 via-[#04182f]/12 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 p-3.5 text-white sm:p-5">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-sm text-[#082747]">
+                {CATEGORY_ICONS[item.id]}
+              </span>
+              <p className="mt-2 text-base font-semibold sm:text-lg">{item.title}</p>
+              <p className="mt-0.5 hidden text-xs text-white/65 sm:block">{item.subtitle}</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RecommendedSection({
+  config,
+  places,
+  storeNamesById,
+}: {
+  config: HomepageConfig["recommended"];
+  places: Place[];
+  storeNamesById: Record<string, string>;
+}) {
+  if (!config.enabled || !places.length) return null;
+
+  return (
+    <section id="recommended" className="border-y border-[#082747]/7 bg-[#fffdf8]">
+      <div className="mx-auto w-full max-w-[1220px] px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="h-7 w-1 rounded-full bg-[#f6ad22]" />
+              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{config.title}</h2>
+            </div>
+            <p className="mt-2 text-sm text-[#526476]">
+              {config.subtitle}
+            </p>
+          </div>
+          <Link
+            href="/places?province=chiang-mai"
+            className="hidden shrink-0 text-sm font-semibold text-[#174e7c] hover:underline sm:block"
+          >
+            ดูทั้งหมด →
+          </Link>
+        </div>
+
+        <div className="mt-7 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-6">
+          {places.map((place) => {
+            const short = placeShortText(place);
+            return (
+              <Link
+                key={place.id}
+                href={`/places/${place.slug}`}
+                className="group overflow-hidden rounded-2xl bg-white shadow-[0_12px_28px_-22px_rgba(8,39,71,0.7)] ring-1 ring-[#082747]/7"
+              >
+                <div className="relative aspect-[4/3] overflow-hidden bg-[#e9e1d2]">
+                  <Image
+                    src={homePlaceImage(place)}
+                    alt=""
+                    fill
+                    sizes="(max-width: 768px) 50vw, 17vw"
+                    className="object-cover transition duration-500 group-hover:scale-[1.04]"
+                  />
+                  <span className="absolute left-2.5 top-2.5 rounded-full bg-white/92 px-2 py-1 text-[10px] font-semibold text-[#174e7c] shadow-sm">
+                    {placeCategoryLabel(place)}
+                  </span>
+                </div>
+                <div className="p-3">
+                  <p className="line-clamp-1 text-sm font-semibold text-[#082747]">{place.name}</p>
+                  <p className="mt-1 line-clamp-1 text-[11px] text-[#526476]">
+                    {place.area || place.district || "เชียงใหม่"}
+                  </p>
+                  {short ? (
+                    <p className="mt-1.5 hidden line-clamp-2 text-[11px] leading-relaxed text-[#526476] sm:block">
+                      {short}
+                    </p>
+                  ) : null}
+                  {place.businessId && storeNamesById[place.businessId] ? (
+                    <p className="mt-2 truncate text-[10px] font-medium text-[#8a650e]">
+                      แนะนำโดย {storeNamesById[place.businessId]}
+                    </p>
+                  ) : null}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+        <Link
+          href="/places?province=chiang-mai"
+          className="mt-6 inline-flex min-h-11 items-center text-sm font-semibold text-[#174e7c] sm:hidden"
+        >
+          ดูสถานที่ทั้งหมด →
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function TransportSection({
+  config,
+  stores,
+}: {
+  config: HomepageConfig["agents"];
+  stores: FeaturedStoreCard[];
+}) {
+  if (!config.enabled || !stores.length) return null;
+
+  return (
+    <section className="mx-auto w-full max-w-[1220px] px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
+      <div className="max-w-2xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#c47e05]">Local Partners</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+          {config.title}
+        </h2>
+        <p className="mt-2 text-sm text-[#526476]">
+          {config.subtitle}
+        </p>
+      </div>
+
+      <div className={`mt-7 grid gap-4 ${stores.length > 1 ? "md:grid-cols-2" : "max-w-[620px]"}`}>
+        {stores.slice(0, 2).map((store) => {
+          const tags = store.partnerServiceTypes
+            .slice(0, 3)
+            .map((type) => PARTNER_SERVICE_TYPE_LABELS[type]);
+          return (
+            <Link
+              key={store.slug}
+              href={storefrontPath(store.slug)}
+              className="group grid min-h-[220px] overflow-hidden rounded-[1.4rem] bg-white shadow-[0_18px_42px_-30px_rgba(8,39,71,0.75)] ring-1 ring-[#082747]/7 sm:grid-cols-[42%_1fr]"
+            >
+              <div className="relative min-h-40 overflow-hidden bg-[#082747]">
+                <Image
+                  src={storeCover(store.coverUrl)}
+                  alt=""
+                  fill
+                  sizes="(max-width: 768px) 100vw, 40vw"
+                  className="object-cover transition duration-500 group-hover:scale-[1.04]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#04182f]/45 to-transparent sm:bg-gradient-to-r" />
+              </div>
+              <div className="flex flex-col p-5">
+                <div className="flex items-center gap-3">
+                  <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-[#082747]/10">
+                    <Image
+                      src={store.logoUrl || "/brand/pond-logo.svg"}
+                      alt=""
+                      fill
+                      sizes="44px"
+                      className="object-cover"
+                    />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#c47e05]">Partner</p>
+                    <p className="truncate font-semibold text-[#082747]">{store.name}</p>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs text-[#526476]">{store.provinceName}</p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {(tags.length ? tags : ["บริการเดินทาง"]).map((tag) => (
+                    <span key={tag} className="rounded-full bg-[#082747]/5 px-2.5 py-1 text-[10px] text-[#27425e]">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <span className="mt-auto pt-5 text-sm font-semibold text-[#174e7c]">ดูหน้าร้าน →</span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="mt-7 text-center">
+        <Link
+          href="/stores"
+          className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#082747] px-6 text-sm font-semibold text-white transition hover:bg-[#174e7c]"
+        >
+          ดูร้านรถทั้งหมด
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function uniquePlaces(places: Place[]): Place[] {
+  return places.filter(
+    (place, index, rows) => rows.findIndex((candidate) => candidate.id === place.id) === index,
+  );
+}
+
+function homePlaceImage(place: Place): string {
+  const source = resolvePlaceImageUrl(place);
+  if (!source.startsWith("/discovery/placeholders/")) return source;
+  if (place.category === "ATTRACTION") return "/home/category-attraction.jpg";
+  if (place.category === "RESTAURANT" || place.category === "LOCAL_FOOD") {
+    return "/home/category-food.jpg";
+  }
+  if (place.category === "CAFE") return "/home/category-cafe.jpg";
+  return "/home/lanna-hero.jpg";
+}
+
+function placeCategoryLabel(place: Place): string {
+  if (place.category === "RESTAURANT" || place.category === "LOCAL_FOOD") return "ร้านอาหาร";
+  if (place.category === "CAFE") return "คาเฟ่";
+  if (place.category === "ATTRACTION") return "ที่เที่ยว";
+  return "แนะนำ";
+}
+
+function storeCover(url: string | null): string {
+  if (!url || url.startsWith("/discovery/")) return "/home/category-transport.jpg";
+  return url;
 }

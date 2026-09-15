@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BookingWorkspace } from "@/components/store-admin/booking/BookingWorkspace";
 import { requireStoreContext } from "@/lib/auth/tenant";
+import { localizedPackageText } from "@/lib/domain/trip-package";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,16 @@ export default async function StoreBookingPage({
     includeInactive: true,
   });
   const driverJob = await ctx.store.listDriverJobForBooking(ctx.actor, id);
+  const tripPackage = record.booking.tripPackageId
+    ? await ctx.store.getTripPackage(ctx.actor, record.booking.tripPackageId)
+    : null;
 
   return (
     <BookingWorkspace
       record={record}
+      tripPackageTitle={
+        tripPackage ? localizedPackageText("th", tripPackage.title, "แพ็กเกจทริป") : null
+      }
       vehicles={board.vehicles}
       drivers={board.drivers}
       places={board.places}

@@ -489,7 +489,17 @@ export const seedBusinessUsers: BusinessUser[] = [
   },
 ];
 
-export const seedPlaces: Place[] = [
+type SeedPlace = Omit<
+  Place,
+  | "sourceType"
+  | "platformModerationStatus"
+  | "platformSubmittedAt"
+  | "platformReviewedAt"
+  | "platformReviewedByUserId"
+  | "platformRejectionReason"
+>;
+
+export const seedPlaces: Place[] = ([
   {
     id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1",
     businessId: null,
@@ -889,7 +899,15 @@ export const seedPlaces: Place[] = [
     createdAt: now,
     updatedAt: now,
   },
-];
+] satisfies SeedPlace[]).map((place) => ({
+  ...place,
+  sourceType: place.businessId ? "AGENT" : "PLATFORM",
+  platformModerationStatus: place.businessId ? "NOT_SUBMITTED" : "APPROVED",
+  platformSubmittedAt: null,
+  platformReviewedAt: null,
+  platformReviewedByUserId: null,
+  platformRejectionReason: null,
+}));
 
 export const seedPaymentAccounts: PaymentAccount[] = [
   {
@@ -941,8 +959,8 @@ export const seedTripPackages: TripPackage[] = [
     passengerMin: 2,
     passengerMax: 8,
     vehicleCategoryHint: "VAN",
-    startingPrice: null,
-    quoteFirst: true,
+    pricingMode: "QUOTE_FIRST",
+    priceAmount: null,
     coverImageUrl: "/brand/heroes/doi-inthanon.jpg",
     galleryImageUrls: [
       "/brand/heroes/doi-inthanon.jpg",
@@ -980,9 +998,9 @@ export const seedTripPackages: TripPackage[] = [
       zh: "确认出行日期、人数与车型后再报价 — 非即时固定价。",
     },
     notes: {
-      th: "แพ็กเกจตัวอย่างสำหรับเดโม — ปรับวันและจุดแวะได้ในขั้นตอนขอใบเสนอราคา",
-      en: "Demo package — dates and stops can be adjusted when requesting a quote.",
-      zh: "演示套餐 — 询价时可调整日期与停靠点。",
+      th: "สามารถปรับวันและจุดแวะได้ในขั้นตอนขอใบเสนอราคา",
+      en: "Dates and stops can be adjusted when requesting a quote.",
+      zh: "询价时可调整日期与停靠点。",
     },
     itinerary: [
       {

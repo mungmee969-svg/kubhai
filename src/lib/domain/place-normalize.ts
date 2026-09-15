@@ -19,6 +19,14 @@ export function normalizePlace(raw: Partial<Place> & Pick<Place, "id" | "provinc
   return {
     id: raw.id,
     businessId: raw.businessId ?? null,
+    sourceType: raw.businessId ? "AGENT" : "PLATFORM",
+    platformModerationStatus:
+      raw.platformModerationStatus ??
+      (raw.businessId ? "NOT_SUBMITTED" : "APPROVED"),
+    platformSubmittedAt: raw.platformSubmittedAt ?? null,
+    platformReviewedAt: raw.platformReviewedAt ?? null,
+    platformReviewedByUserId: raw.platformReviewedByUserId ?? null,
+    platformRejectionReason: raw.platformRejectionReason ?? null,
     provinceId: raw.provinceId,
     category: raw.category,
     subcategory: raw.subcategory ?? null,
@@ -52,4 +60,21 @@ export function normalizePlace(raw: Partial<Place> & Pick<Place, "id" | "provinc
     createdAt: raw.createdAt ?? now,
     updatedAt: raw.updatedAt ?? now,
   };
+}
+
+export function isPlatformDiscoveryEligible(
+  place: Pick<Place, "status" | "sourceType" | "platformModerationStatus">,
+): boolean {
+  return (
+    place.status === "ACTIVE" &&
+    (place.sourceType === "PLATFORM" ||
+      place.platformModerationStatus === "APPROVED")
+  );
+}
+
+export function isStorefrontPublishedPlace(
+  place: Pick<Place, "businessId" | "status">,
+  businessId: string,
+): boolean {
+  return place.businessId === businessId && place.status === "ACTIVE";
 }

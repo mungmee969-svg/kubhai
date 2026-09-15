@@ -17,6 +17,7 @@ const uuidPlaceIdsSchema = z.preprocess(
 export const bookingRequestSchema = z.object({
   businessSlug: z.string().min(1).max(80),
   clientRequestId: z.string().uuid(),
+  tripPackageId: z.string().uuid().nullable().optional(),
   serviceType: z.enum(SERVICE_TYPES),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startTime: clockTimeSchema,

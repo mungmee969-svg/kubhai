@@ -16,6 +16,8 @@ export type BookingDraft = {
   /** v4 = Quick Booking 5-card flow (travel details combined). */
   version: 4;
   step: BookingWizardStep;
+  /** Originating Trip Package; null for ordinary Quick Booking. */
+  tripPackageId: string | null;
   serviceType: ServiceType;
   startDate: string;
   startTime: string;
@@ -88,6 +90,7 @@ export function emptyBookingDraft(partial?: Partial<BookingDraft>): BookingDraft
   const base: BookingDraft = {
     version: 4,
     step: 1,
+    tripPackageId: null,
     serviceType: "PRIVATE_DRIVER_DAILY",
     startDate: "",
     startTime: "09:00",
@@ -317,6 +320,7 @@ export function addPlaceToBookingDraft(
 export type BookingSubmitPayload = {
   businessSlug: string;
   clientRequestId: string;
+  tripPackageId: string | null;
   serviceType: ServiceType;
   startDate: string;
   startTime: string | null;

@@ -48,32 +48,40 @@ async function main() {
   assert("route /stores", pageExists("src/app/stores/page.tsx"));
   assert("route /s/[slug]", pageExists("src/app/s/[slug]/page.tsx") || pageExists("src/app/s/[storeSlug]/page.tsx"));
   assert("route /store/login", pageExists("src/app/store/login/page.tsx"));
+  assert("route /store/signup", pageExists("src/app/store/signup/page.tsx"));
   assert("route /store", pageExists("src/app/store/page.tsx"));
   assert("route /account", pageExists("src/app/account/page.tsx"));
   assert("route /booking/[token]", pageExists("src/app/booking/[token]/page.tsx"));
+  assert("route /admin/website", pageExists("src/app/admin/website/page.tsx"));
+  assert("route /admin/website/preview", pageExists("src/app/admin/website/preview/page.tsx"));
 
   assert("landing component exists", pageExists("src/components/marketing/KubHaiLanding.tsx"));
 
   const home = read("src/app/page.tsx");
   const landing = read("src/components/marketing/KubHaiLanding.tsx");
-  const rootSurface = `${home}\n${landing}`;
+  const homepageConfig = read("src/lib/domain/homepage-cms.ts");
+  const rootSurface = `${home}\n${landing}\n${homepageConfig}`;
 
   assert("root uses KubHaiLanding", home.includes("KubHaiLanding"));
   assert("KubHai identity in landing", landing.includes("KubHai") && landing.includes("ขับให้"));
-  assert("hero headline present", landing.includes("เที่ยวเหนือ ไปกับขับให้"));
-  assert("discovery prompt present", landing.includes("ค้นหาแรงบันดาลใจ"));
-  assert("service discovery visible", landing.includes("รถพร้อมคนขับ") && landing.includes("ที่เที่ยว"));
-  assert("featured store customer title", landing.includes("พาร์ทเนอร์เดินทาง"));
-  assert("featured store CTA", landing.includes("ดูบริการ"));
+  assert("hero headline present", homepageConfig.includes("เสน่ห์แห่งล้านนา"));
+  assert("discovery prompt present", homepageConfig.includes("อยากไปไหน หรือกำลังหาอะไร?"));
+  assert("service discovery visible", homepageConfig.includes("รถเช่า / บริการรถ") && homepageConfig.includes("ที่เที่ยว"));
+  assert("featured store customer title", homepageConfig.includes("เดินทางต่อกับร้านรถที่เหมาะกับคุณ"));
+  assert("featured store CTA", landing.includes("ดูหน้าร้าน"));
   assert("POND card uses storefrontPath / slug", landing.includes("storefrontPath") || landing.includes("/s/"));
-  assert("store login secondary only", landing.includes("/store/login") && (landing.includes("สำหรับพาร์ทเนอร์") || landing.includes("สำหรับร้านค้า")));
+  assert("operator login is not duplicated on homepage", !landing.includes("/store/login"));
+  assert("merchant signup route remains real", pageExists("src/app/store/signup/page.tsx"));
   assert("customer login separate", landing.includes("platformLoginHref") || landing.includes("/account/login"));
-  assert("travel hero image slot", landing.includes("DISCOVERY_HERO_IMAGE") || landing.includes("/discovery/placeholders/hero-north"));
+  assert("travel hero image slot", homepageConfig.includes("/home/lanna-hero.jpg"));
   assert("page is not LoginForm", !rootSurface.includes("LoginForm"));
   assert("places route exists", pageExists("src/app/places/[slug]/page.tsx"));
   assert("places index exists", pageExists("src/app/places/page.tsx"));
-  assert("not car-only positioning", landing.includes("เที่ยว • กิน • ช้อป • พัก • เดินทาง"));
-  assert("partner intermediary copy", landing.includes("ไม่ใช่รถของ KubHai เอง"));
+  assert("not car-only positioning", homepageConfig.includes("เที่ยว กิน พัก เดินทาง"));
+  assert(
+    "partner intermediary flow",
+    homepageConfig.includes("พาร์ทเนอร์ในพื้นที่") && landing.includes("storefrontPath(store.slug)"),
+  );
 
   for (const phrase of FORBIDDEN_CUSTOMER_COPY) {
     assert(`no customer copy: ${phrase}`, !rootSurface.includes(phrase));
@@ -84,6 +92,7 @@ async function main() {
 
   const proxy = read("src/proxy.ts");
   assert("proxy allows /store/login without session", proxy.includes("/store/login"));
+  assert("proxy allows /store/signup without session", proxy.includes('pathname === "/store/signup"'));
   assert("proxy redirects store auth to /store/login", proxy.includes('"/store/login'));
   assert("proxy customer auth uses platform context", proxy.includes("context=platform"));
   assert("login page never falls back to pondcarrent", !read("src/app/account/login/page.tsx").includes("pondcarrent"));

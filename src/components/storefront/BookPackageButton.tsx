@@ -32,7 +32,21 @@ export function BookPackageButton({
   function startBooking() {
     if (pending) return;
     setPending(true);
-    const base = readBookingDraft(storeSlug) ?? emptyBookingDraft();
+    const previous = readBookingDraft(storeSlug);
+    // A package starts a new trip intent. Preserve customer identity only so
+    // stale dates, routes, or vehicle choices cannot leak from another draft.
+    const base = emptyBookingDraft(
+      previous
+        ? {
+            name: previous.name,
+            phone: previous.phone,
+            email: previous.email,
+            customerType: previous.customerType,
+            companyName: previous.companyName,
+            taxId: previous.taxId,
+          }
+        : undefined,
+    );
     const next: BookingDraft = {
       ...base,
       ...mapPackageToBookingDraftPrefill(pkg, locale),

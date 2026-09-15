@@ -12,7 +12,11 @@
 
 import type { CSSProperties } from "react";
 import { kubhaiBrand } from "@/lib/brand/tokens";
-import { brandingCssVars, resolveBusinessBranding, type BusinessBranding } from "@/lib/domain/branding";
+import {
+  brandingCssVars,
+  resolveCustomerStorefrontBranding,
+  type BusinessBranding,
+} from "@/lib/domain/branding";
 import { getStore } from "@/lib/data";
 import { sanitizeCustomerReturnTo } from "@/lib/auth/customer-auth-links";
 
@@ -116,7 +120,7 @@ export async function resolveCustomerAuthPresentation(input: {
   if (explicitSlug) {
     const store = await getStore().getPublicStore(explicitSlug);
     if (store?.business) {
-      const brand = resolveBusinessBranding(store.business);
+      const brand = resolveCustomerStorefrontBranding(store.business);
       const fallbackReturn = `/s/${brand.slug}`;
       return partnerPresentation(brand, sanitizeCustomerReturnTo(input.next, fallbackReturn));
     }

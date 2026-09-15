@@ -4,6 +4,7 @@ import { ActiveToggle } from "@/components/store-admin/ui/ActiveToggle";
 import { PLACE_CATEGORIES, PLACE_CATEGORY_LABELS } from "@/lib/domain/enums";
 import { requireStoreContext } from "@/lib/auth/tenant";
 import { resolvePlaceImageUrl } from "@/lib/domain/place-image";
+import { PlacePlatformSubmission } from "@/components/store-admin/PlacePlatformSubmission";
 
 export const dynamic = "force-dynamic";
 
@@ -86,12 +87,16 @@ export default async function PlacesPage({
                   {place.localRecommended ? " · คนพื้นที่แนะนำ" : ""}
                 </p>
                 <p className="mt-1 text-xs font-medium">
+                  <span className="text-muted">หน้าร้าน: </span>
                   {place.status === "ACTIVE" ? (
-                    <span className="text-success">แสดงลูกค้า</span>
+                    <span className="text-success">แสดง</span>
                   ) : (
-                    <span className="text-muted">ซ่อน / ปิดใช้งาน</span>
+                    <span className="text-muted">ซ่อน</span>
                   )}
                 </p>
+                {place.businessId === ctx.businessId ? (
+                  <PlacePlatformSubmission place={place} />
+                ) : null}
               </div>
               {place.businessId ? (
                 <div className="flex shrink-0 flex-col items-end gap-2 text-sm sm:flex-row sm:items-center sm:gap-3">

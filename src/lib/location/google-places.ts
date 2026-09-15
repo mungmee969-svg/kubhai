@@ -1,16 +1,13 @@
 /**
  * Google Places helpers (server-side).
- * Uses GOOGLE_MAPS_API_KEY or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY when present.
+ * Uses the server-only GOOGLE_MAPS_API_KEY.
  * Never hardcode secrets — configure via environment.
  */
 
 import type { LocationSuggestion } from "@/lib/location/provider";
 
 export function resolveGoogleMapsApiKey(): string | null {
-  const key =
-    process.env.GOOGLE_MAPS_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
-    "";
+  const key = process.env.GOOGLE_MAPS_API_KEY?.trim() || "";
   return key || null;
 }
 
@@ -30,10 +27,13 @@ type AutocompletePrediction = {
 };
 
 /**
- * Places API (New) Autocomplete — Chiang Mai biased.
+ * Places API (New) Autocomplete with optional caller-provided location bias.
  * Returns empty array when key missing or request fails (caller falls back to local).
  */
-export async function googlePlacesAutocomplete(query: string): Promise<LocationSuggestion[]> {
+export async function googlePlacesAutocomplete(
+  query: string,
+  options?: { latitude?: number | null; longitude?: number | null },
+): Promise<LocationSuggestion[]> {
   const key = resolveGoogleMapsApiKey();
   const q = query.trim();
   if (!key || q.length < 2) return [];
@@ -51,12 +51,19 @@ export async function googlePlacesAutocomplete(query: string): Promise<LocationS
         input: q,
         languageCode: "th",
         includedRegionCodes: ["th"],
-        locationBias: {
-          circle: {
-            center: { latitude: 18.7883, longitude: 98.9853 },
-            radius: 40000.0,
-          },
-        },
+        ...(Number.isFinite(options?.latitude) && Number.isFinite(options?.longitude)
+          ? {
+              locationBias: {
+                circle: {
+                  center: {
+                    latitude: Number(options?.latitude),
+                    longitude: Number(options?.longitude),
+                  },
+                  radius: 40000,
+                },
+              },
+            }
+          : {}),
       }),
       cache: "no-store",
     });

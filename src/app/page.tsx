@@ -7,28 +7,43 @@ import { normalizePartnerServiceTypes } from "@/lib/domain/partner-types";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "KubHai ขับให้ — เที่ยว กิน ช้อป พัก และเดินทาง",
-  description: "ค้นหาที่เที่ยว ร้านอาหาร คาเฟ่ ที่พัก และบริการเดินทางจากพาร์ทเนอร์ในภาคเหนือ",
+  title: "KubHai ขับให้ — ค้นพบเสน่ห์แห่งล้านนา",
+  description: "ค้นพบที่เที่ยว ร้านอาหาร คาเฟ่ และบริการเดินทางในภาคเหนือ",
 };
 
 export default async function HomePage() {
   const storeApi = getStore();
-  const pond = await storeApi.getPublicStore("pondcarrent");
-  const business = pond?.business;
-  const places = await storeApi.listPublicPlaces({ provinceSlug: "chiang-mai" });
-  const provinceId = pond?.province?.id ?? SEED.provinceChiangMai;
+  const [homepage, places] = await Promise.all([
+    storeApi.getPublishedHomepageConfig(),
+    storeApi.listPublicPlaces({ provinceSlug: "chiang-mai" }),
+  ]);
+  const availablePartners = await storeApi.listPublicStores();
+  const partners = homepage.agents.useAutomaticSelection
+    ? availablePartners.slice(0, 1)
+    : homepage.agents.businessIds
+        .map((id) => availablePartners.find((item) => item.business.id === id))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const provinceId =
+    places[0]?.provinceId ?? partners[0]?.province?.id ?? SEED.provinceChiangMai;
 
   return (
     <KubHaiLanding
-      store={{
-        slug: business?.slug ?? "pondcarrent",
-        name: business?.name ?? "POND Car Rent",
-        shortName: business?.shortName ?? "POND",
-        logoUrl: business?.logoUrl ?? "/brand/pond-logo.jpg",
-        coverUrl: business?.coverUrl ?? null,
-        provinceName: pond?.province?.nameTh ?? "เชียงใหม่",
-        partnerServiceTypes: normalizePartnerServiceTypes(business?.partnerServiceTypes),
-      }}
+      config={homepage}
+      storeNamesById={Object.fromEntries(
+        availablePartners.map((item) => [
+          item.business.id,
+          item.business.name,
+        ]),
+      )}
+      stores={partners.map(({ business, province }) => ({
+        slug: business.slug,
+        name: business.name,
+        shortName: business.shortName ?? business.name,
+        logoUrl: business.logoUrl,
+        coverUrl: business.coverUrl,
+        provinceName: province?.nameTh ?? "เชียงใหม่",
+        partnerServiceTypes: normalizePartnerServiceTypes(business.partnerServiceTypes),
+      }))}
       places={places}
       provinceId={provinceId}
     />

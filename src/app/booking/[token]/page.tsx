@@ -4,17 +4,21 @@ import { notFound, redirect } from "next/navigation";
 import { RememberStoreContext } from "@/components/brand/RememberStoreContext";
 import {
   ContactStoreLinks,
-  StoreBrandScope,
   StoreLogo,
 } from "@/components/brand/StoreBrand";
+import { CustomerStoreIdentityLink } from "@/components/brand/CustomerStoreIdentityLink";
+import { LocationMapPreview } from "@/components/maps/LocationMapPreview";
 import { brandingMetadata } from "@/components/brand/CustomerStoreChrome";
 import { BookingAccountBanner } from "@/components/booking/BookingAccountBanner";
 import { CustomerPaymentProof } from "@/components/booking/CustomerPaymentProof";
 import { CustomerQuotation } from "@/components/quotation/CustomerQuotation";
 import { StoreTipsCard } from "@/components/storefront/StoreTipsCard";
+import { CustomerExperienceShell } from "@/components/storefront/CustomerExperienceShell";
+import { CustomerPrefsControls } from "@/components/storefront/CustomerPrefsControls";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import { getStore } from "@/lib/data";
+import { allowsCustomerLocales } from "@/lib/domain/booking-entitlements";
 import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
 import { SERVICE_TYPE_LABELS } from "@/lib/domain/enums";
 import { publicBookingRecord } from "@/lib/domain/public-view";
@@ -26,6 +30,8 @@ import {
   customerTripLabel,
   deriveTripProgress,
 } from "@/lib/domain/location";
+import { readCustomerLocaleCookie, readCustomerThemeCookie } from "@/lib/i18n/server";
+import { translate } from "@/lib/i18n/translate";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +75,11 @@ export default async function BookingPage({
   }
 
   const brand = resolveCustomerStorefrontBranding(raw.business);
+  const [locale, theme] = await Promise.all([
+    readCustomerLocaleCookie(),
+    readCustomerThemeCookie(),
+  ]);
+  const t = (key: string) => translate(locale, key);
   const settlement = settleBooking(raw.booking, raw.movements);
   const record = publicBookingRecord(raw);
   const { booking, business, vehicle, driver, itinerary } = record;
@@ -92,16 +103,29 @@ export default async function BookingPage({
   const tipSettings = publicStore?.settings?.tips ?? [];
 
   return (
-    <StoreBrandScope brand={brand} className="min-h-dvh bg-store-paper">
+    <CustomerExperienceShell
+      brand={brand}
+      storeSlug={business.slug}
+      multilingual={allowsCustomerLocales(raw.business.subscriptionPlan)}
+      initialLocale={locale}
+      initialTheme={theme}
+      className="min-h-dvh"
+    >
       <RememberStoreContext slug={business.slug} />
       <header className="bg-store text-white">
         <div className="mx-auto max-w-lg px-5 py-7">
-          <div className="flex items-center gap-3">
-            <StoreLogo brand={brand} size={40} className="bg-white" />
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs text-white/70">{brand.businessName}</p>
-              <h1 className="text-2xl font-semibold">{booking.bookingCode}</h1>
+              <CustomerStoreIdentityLink
+                brand={brand}
+                storeSlug={business.slug}
+                subtitle={t("bookingDetail.title")}
+                logoSize={40}
+                subtitleClassName="text-white/70"
+              />
+              <h1 className="mt-1 text-2xl font-semibold">{booking.bookingCode}</h1>
             </div>
+            <CustomerPrefsControls compact />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <StatusBadge status={booking.status} audience="customer" />
@@ -123,27 +147,37 @@ export default async function BookingPage({
         />
 
         {booking.status === "REQUESTED" ? (
-          <section className="rounded-3xl bg-white p-5">
-            <p className="text-lg font-semibold">ร้านกำลังตรวจสอบรถและราคา</p>
+          <section className="rounded-3xl bg-[color:var(--cx-surface)] p-5">
+            <p className="text-lg font-semibold">{t("booking.quotePending")}</p>
             <p className="mt-2 text-sm leading-6 text-muted">
-              ยังไม่ยืนยันการจอง {brand.shortName} จะติดต่อกลับเมื่อตรวจรถและเสนอราคาแล้ว
+              {t("booking.notConfirmed")}
             </p>
           </section>
         ) : null}
 
-        <section className="rounded-3xl bg-white p-5">
-          <h2 className="font-semibold">รายละเอียดทริป</h2>
+        <section className="rounded-3xl bg-[color:var(--cx-surface)] p-5">
+          <h2 className="font-semibold">{t("bookingDetail.title")}</h2>
           <dl className="mt-3 space-y-2 text-sm">
-            <Row label="บริการ" value={SERVICE_TYPE_LABELS[booking.serviceType]} />
+            <Row label={t("bookingDetail.service")} value={SERVICE_TYPE_LABELS[booking.serviceType]} />
             <Row
-              label="วันเวลา"
+              label={t("bookingDetail.schedule")}
               value={`${booking.startDate}${booking.startTime ? ` ${booking.startTime}` : ""}`}
             />
-            <Row label="รับที่" value={booking.pickupLocation} />
+            <Row label={t("booking.pickup")} value={booking.pickupLocation} />
             {booking.pickupNote ? <Row label="หมายเหตุรับ" value={booking.pickupNote} /> : null}
-            <Row label="ส่งที่" value={booking.dropoffLocation ?? "-"} />
+            <Row label={t("booking.dropoff")} value={booking.dropoffLocation ?? "-"} />
             {booking.dropoffNote ? <Row label="หมายเหตุส่ง" value={booking.dropoffNote} /> : null}
-            <Row label="ผู้โดยสาร" value={String(booking.passengerCount)} />
+            <Row label={t("booking.passengers")} value={String(booking.passengerCount)} />
+            {booking.pickupLat != null && booking.pickupLng != null ? (
+              <LocationMapPreview
+                latitude={booking.pickupLat}
+                longitude={booking.pickupLng}
+                label={booking.pickupLocation}
+                notConfiguredLabel={t("maps.notConfigured")}
+                coordinatesUnavailableLabel={t("maps.coordinatesUnavailable")}
+                className="mt-3"
+              />
+            ) : null}
           </dl>
         </section>
 
@@ -162,7 +196,7 @@ export default async function BookingPage({
         ) : null}
 
         {itinerary.length ? (
-          <section className="rounded-3xl bg-white p-5">
+          <section className="rounded-3xl bg-[color:var(--cx-surface)] p-5">
             <h2 className="font-semibold">แผนทริป</h2>
             <ol className="mt-3 space-y-2 text-sm">
               {itinerary.map((item, index) => (
@@ -174,8 +208,8 @@ export default async function BookingPage({
           </section>
         ) : null}
 
-        <section className="rounded-3xl bg-white p-5">
-          <h2 className="font-semibold">รถ / คนขับ</h2>
+        <section className="rounded-3xl bg-[color:var(--cx-surface)] p-5">
+          <h2 className="font-semibold">{t("bookingDetail.vehicle")}</h2>
           {vehicle ? (
             <p className="mt-2 text-sm">
               {vehicle.brand} {vehicle.model}
@@ -196,7 +230,7 @@ export default async function BookingPage({
         </section>
 
         {record.notes.filter((item) => item.audience === "CUSTOMER").length ? (
-          <section className="rounded-3xl border border-store/15 bg-white p-5">
+          <section className="rounded-3xl border border-store/15 bg-[color:var(--cx-surface)] p-5">
             <p className="text-xs font-semibold text-store">คำแนะนำจาก {brand.shortName || brand.businessName}</p>
             <ul className="mt-2 space-y-2 text-sm">
               {record.notes
@@ -223,10 +257,12 @@ export default async function BookingPage({
           />
         ) : null}
 
-        <section className="rounded-3xl bg-white p-5">
+        <section className="rounded-3xl bg-[color:var(--cx-surface)] p-5">
           <div className="mb-3 flex items-center gap-2">
             <StoreLogo brand={brand} size={28} />
-            <p className="text-sm font-semibold text-store">ชำระเงินให้ {brand.businessName}</p>
+            <p className="text-sm font-semibold text-store">
+              {t("bookingDetail.payment")} · {brand.businessName}
+            </p>
           </div>
           <CustomerPaymentProof
             token={token}
@@ -253,24 +289,24 @@ export default async function BookingPage({
               href={`tel:${business.phone}`}
               className="flex h-12 items-center justify-center rounded-2xl bg-store text-white text-sm font-semibold"
             >
-              ติดต่อร้าน
+              {t("common.contactStore")}
             </a>
           ) : (
             <span className="flex h-12 items-center justify-center rounded-2xl bg-line text-sm text-muted">
-              ติดต่อร้าน
+              {t("common.contactStore")}
             </span>
           )}
           <Link
             href={`/s/${business.slug}`}
-            className="flex h-12 items-center justify-center rounded-2xl bg-white text-sm font-semibold"
+            className="flex h-12 items-center justify-center rounded-2xl bg-[color:var(--cx-surface)] text-sm font-semibold"
           >
-            กลับหน้าร้าน
+            {t("auth.backToStore")}
           </Link>
         </div>
 
         <ContactStoreLinks brand={brand} />
       </main>
-    </StoreBrandScope>
+    </CustomerExperienceShell>
   );
 }
 

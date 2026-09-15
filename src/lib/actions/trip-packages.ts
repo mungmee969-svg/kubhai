@@ -38,10 +38,8 @@ function fail(error: unknown): TripPackageActionResult<never> {
 
 async function revalidateTripPackagePaths(businessId: string, packageId?: string) {
   revalidatePath("/store");
-  revalidatePath("/store/packages");
   revalidatePath("/store/trip-packages");
   if (packageId) {
-    revalidatePath(`/store/packages/${packageId}`);
     revalidatePath(`/store/trip-packages/${packageId}`);
   }
   try {

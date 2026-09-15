@@ -1,65 +1,78 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { BrandMark } from "@/components/brand/BrandMark";
-import { logoutAction } from "@/lib/actions/auth";
-import { actorFromSession, getSession } from "@/lib/auth/session";
-import { getStore } from "@/lib/data";
+import { PlatformAdminShell } from "@/components/admin/PlatformAdminShell";
+import { requirePlatformAdmin } from "@/lib/auth/platform-admin";
+import { formatPlanPriceThb } from "@/lib/domain/saas-plans";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const session = await getSession();
-  if (!session || session.role !== "SUPER_ADMIN") redirect("/login");
-  const businesses = await getStore().listBusinesses(actorFromSession(session));
+  const ctx = await requirePlatformAdmin();
+  const [businesses, dashboard, awaiting] = await Promise.all([
+    ctx.store.listBusinesses(ctx.actor),
+    ctx.store.getPlatformSaasDashboard(ctx.actor),
+    ctx.store.listPlatformSaasProofs(ctx.actor, "AWAITING_REVIEW"),
+  ]);
 
   return (
-    <div className="min-h-dvh bg-navy-950 text-white">
-      <header className="mx-auto flex max-w-4xl items-center justify-between px-5 py-5">
-        <div className="flex items-center gap-3">
-          <BrandMark size={40} />
-          <div>
-            <p className="text-sm font-semibold">KubHai Super Admin</p>
-            <p className="text-xs text-white/60">แพลตฟอร์ม · ไม่ใช่หน้าร้าน</p>
+    <PlatformAdminShell>
+      <h1 className="text-2xl font-semibold">Platform Dashboard</h1>
+      <p className="mt-2 text-sm text-white/60">
+        ตัวเลขด้านล่างมาจาก SaaS subscription/payment เท่านั้น ไม่รวมเงินจองลูกค้า
+      </p>
+      <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {[
+          ["ร้านทั้งหมด", dashboard.totalStores],
+          ["Subscription ใช้งาน", dashboard.activeSubscriptions],
+          ["รอตรวจสลิป", dashboard.awaitingReview],
+          ["เกินกำหนด", dashboard.overdueSubscriptions],
+          ["รายได้ SaaS เดือนนี้", formatPlanPriceThb(dashboard.revenueThisMonthThb)],
+        ].map(([label, value]) => (
+          <article key={label} className="rounded-2xl bg-white/5 p-4">
+            <p className="text-xs text-white/60">{label}</p>
+            <p className="mt-2 text-xl font-semibold">{value}</p>
+          </article>
+        ))}
+      </section>
+      <section className="mt-6 grid gap-4 lg:grid-cols-2">
+        <article className="rounded-3xl bg-white/5 p-5">
+          <div className="flex justify-between gap-3">
+            <h2 className="font-semibold">Plan distribution</h2>
+            <Link href="/admin/stores" className="text-xs text-accent">ดูร้านทั้งหมด →</Link>
           </div>
-        </div>
-        <form action={logoutAction}>
-          <button className="text-xs text-white/70">ออกจากระบบ</button>
-        </form>
-      </header>
-      <main className="mx-auto max-w-4xl px-5 pb-16">
-        <h1 className="text-2xl font-semibold">ธุรกิจในระบบ</h1>
-        <p className="mt-2 text-sm text-white/60">
-          ร้านแนะนำแบบจ่ายเงินและอันดับออร์แกนิกแยกกัน Featured / Sponsored
-          ไม่ไปยุ่ง ranking_score
-        </p>
-        <div className="mt-6 space-y-3">
-          {businesses.map((business) => (
-            <article key={business.id} className="rounded-3xl bg-white/5 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-lg font-semibold">{business.name}</p>
-                  <p className="text-sm text-white/60">/{business.slug}</p>
-                  <p className="mt-2 text-xs text-white/50">
-                    {business.status}
-                    {business.sponsored ? " · Sponsored" : ""}
-                    {business.featured ? " · Featured" : ""}
-                    {business.isSeed ? " · seed" : ""}
-                  </p>
-                </div>
-                <Link
-                  href={`/s/${business.slug}`}
-                  className="rounded-full bg-accent px-3 py-2 text-xs font-semibold text-navy-950"
-                >
-                  เปิดหน้าร้าน
-                </Link>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            {(["starter", "pro", "business"] as const).map((plan) => (
+              <div key={plan} className="rounded-xl bg-white/5 p-3">
+                <p className="text-xs uppercase text-white/60">{plan}</p>
+                <p className="mt-1 text-lg font-semibold">
+                  {dashboard.planDistribution[plan]}
+                </p>
               </div>
-            </article>
+            ))}
+          </div>
+        </article>
+        <article className="rounded-3xl bg-white/5 p-5">
+          <div className="flex justify-between gap-3">
+            <h2 className="font-semibold">รอตรวจหลักฐาน</h2>
+            <Link href="/admin/saas-payments" className="text-xs text-accent">เปิดคิว →</Link>
+          </div>
+          <p className="mt-4 text-3xl font-semibold">{awaiting.length}</p>
+        </article>
+      </section>
+      <section className="mt-6 rounded-3xl bg-white/5 p-5">
+        <h2 className="font-semibold">ร้านล่าสุด</h2>
+        <div className="mt-3 space-y-2">
+          {businesses.slice(-5).reverse().map((business) => (
+            <Link
+              key={business.id}
+              href={`/admin/stores/${business.id}`}
+              className="flex items-center justify-between rounded-xl bg-white/5 px-4 py-3"
+            >
+              <span>{business.name}</span>
+              <span className="text-xs text-white/60">{business.subscriptionPlan}</span>
+            </Link>
           ))}
         </div>
-        <p className="mt-8 text-sm text-white/50">
-          การสร้างร้าน / แพ็กเกจ / marketplace ยังไม่เปิดในรอบนี้
-        </p>
-      </main>
-    </div>
+      </section>
+    </PlatformAdminShell>
   );
 }

@@ -8,6 +8,10 @@ import { allowsCustomerLocales } from "@/lib/domain/booking-entitlements";
 import { publicVehicle } from "@/lib/domain/public-view";
 import { trackPublicEvent } from "@/lib/actions/analytics";
 import { sourceFromSearch } from "@/lib/analytics/source";
+import {
+  readCustomerLocaleCookie,
+  readCustomerThemeCookie,
+} from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +35,11 @@ export default async function StorefrontPage({
   const query = await searchParams;
   const data = await getStore().getPublicStore(slug);
   if (!data) notFound();
-  const session = await getCustomerSession();
+  const [session, initialLocale, initialTheme] = await Promise.all([
+    getCustomerSession(),
+    readCustomerLocaleCookie(),
+    readCustomerThemeCookie(),
+  ]);
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (typeof value === "string") search.set(key, value);
@@ -60,6 +68,8 @@ export default async function StorefrontPage({
       initialSource={source}
       loggedIn={Boolean(session)}
       multilingual={allowsCustomerLocales(data.business.subscriptionPlan)}
+      initialLocale={initialLocale}
+      initialTheme={initialTheme}
       prefill={{
         name: session?.displayName ?? undefined,
         phone: session?.phone ?? undefined,

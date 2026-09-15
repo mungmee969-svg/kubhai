@@ -14,6 +14,7 @@ import {
   type BookingCapability,
   type SubscriptionPlanId,
 } from "./booking-entitlements";
+import type { SaasInvoiceStatus } from "./types";
 
 export type PublicSaasPlanId = "starter" | "pro" | "business";
 
@@ -150,17 +151,11 @@ export function resolveKubHaiSaasPaymentConfig(): KubHaiSaasPaymentConfig {
   };
 }
 
-export type SaasSubscriptionPaymentStatus =
-  | "PENDING"
-  | "IN_REVIEW"
-  | "PAID"
-  | "OVERDUE"
-  | "CANCELLED";
-
-export const SAAS_PAYMENT_STATUS_LABEL: Record<SaasSubscriptionPaymentStatus, string> = {
+export const SAAS_PAYMENT_STATUS_LABEL: Record<SaasInvoiceStatus, string> = {
   PENDING: "รอชำระ",
-  IN_REVIEW: "รอตรวจสอบ",
+  AWAITING_REVIEW: "รอตรวจสอบ",
   PAID: "ชำระแล้ว",
+  REJECTED: "ไม่ผ่าน",
   OVERDUE: "เกินกำหนด",
   CANCELLED: "ยกเลิก",
 };

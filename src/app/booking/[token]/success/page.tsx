@@ -4,11 +4,12 @@ import { notFound } from "next/navigation";
 import { RememberStoreContext } from "@/components/brand/RememberStoreContext";
 import {
   ContactStoreLinks,
-  StoreBrandScope,
-  StoreLogo,
 } from "@/components/brand/StoreBrand";
+import { CustomerStoreIdentityLink } from "@/components/brand/CustomerStoreIdentityLink";
 import { brandingMetadata } from "@/components/brand/CustomerStoreChrome";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { CustomerExperienceShell } from "@/components/storefront/CustomerExperienceShell";
+import { CustomerPrefsControls } from "@/components/storefront/CustomerPrefsControls";
 import {
   partnerBookingsClaimPath,
   partnerLoginHrefWithClaim,
@@ -16,8 +17,11 @@ import {
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import { getStore } from "@/lib/data";
 import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
+import { allowsCustomerLocales } from "@/lib/domain/booking-entitlements";
 import { resolveBookingPresentation } from "@/lib/domain/booking-presentation";
 import { revealsAssignment } from "@/lib/domain/booking-rules";
+import { readCustomerLocaleCookie, readCustomerThemeCookie } from "@/lib/i18n/server";
+import { translate } from "@/lib/i18n/translate";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +46,11 @@ export default async function BookingSuccessPage({
   const raw = await getStore().getBookingByToken(token);
   if (!raw) notFound();
   const brand = resolveCustomerStorefrontBranding(raw.business);
+  const [locale, theme] = await Promise.all([
+    readCustomerLocaleCookie(),
+    readCustomerThemeCookie(),
+  ]);
+  const t = (key: string) => translate(locale, key);
   const presentation = resolveBookingPresentation({ business: raw.business });
   const { booking, business } = raw;
   const confirmed = revealsAssignment(booking.status);
@@ -50,28 +59,35 @@ export default async function BookingSuccessPage({
   const myBookingsHref = session
     ? partnerBookingsClaimPath(business.slug, token)
     : partnerLoginHrefWithClaim(business.slug, `/s/${business.slug}/bookings`, token);
-  const headline = confirmed ? "ยืนยันการจองแล้ว" : "ส่งคำขอจองแล้ว";
+  const headline = confirmed ? t("success.title.confirmed") : t("success.title.request");
   const hero = presentation.hero.desktopUrl;
 
   const timeline = confirmed
     ? [
-        { done: true, label: "ส่งคำขอแล้ว" },
-        { done: true, label: "ร้านตรวจสอบรถ" },
-        { done: true, label: "รับใบเสนอราคา" },
-        { done: true, label: "ยืนยันและชำระมัดจำ" },
-        { done: true, label: "ยืนยันการจอง" },
+        { done: true, label: t("status.REQUESTED") },
+        { done: true, label: t("status.CHECKING_AVAILABILITY") },
+        { done: true, label: t("status.QUOTATION_SENT") },
+        { done: true, label: t("payment.approved") },
+        { done: true, label: t("status.CONFIRMED") },
       ]
     : [
-        { done: true, label: "ส่งคำขอแล้ว" },
-        { done: false, label: "ทางร้านตรวจสอบรายละเอียด" },
-        { done: false, label: "รับใบเสนอราคา" },
-        { done: false, label: "ยืนยันข้อเสนอ" },
-        { done: false, label: "ชำระเงิน" },
-        { done: false, label: "ยืนยันการจอง" },
+        { done: true, label: t("status.REQUESTED") },
+        { done: false, label: t("status.CHECKING_AVAILABILITY") },
+        { done: false, label: t("status.QUOTATION_SENT") },
+        { done: false, label: t("status.CUSTOMER_CONFIRMED") },
+        { done: false, label: t("bookingDetail.payment") },
+        { done: false, label: t("status.CONFIRMED") },
       ];
 
   return (
-    <StoreBrandScope brand={brand} className="booking-shell booking-atm-review min-h-dvh">
+    <CustomerExperienceShell
+      brand={brand}
+      storeSlug={business.slug}
+      multilingual={allowsCustomerLocales(raw.business.subscriptionPlan)}
+      initialLocale={locale}
+      initialTheme={theme}
+      className="booking-shell booking-atm-review min-h-dvh"
+    >
       <RememberStoreContext slug={business.slug} />
       <div className="booking-shell-bg" aria-hidden />
 
@@ -82,22 +98,30 @@ export default async function BookingSuccessPage({
         ) : null}
         <div className="booking-hero-overlay absolute inset-0" />
         <div className="relative mx-auto max-w-lg px-5 pb-10 pt-6 text-center">
+          <div className="absolute right-4 top-4">
+            <CustomerPrefsControls compact />
+          </div>
           <div className="mx-auto mb-3 flex justify-center">
-            <StoreLogo brand={brand} size={48} className="bg-white shadow-sm" />
+            <CustomerStoreIdentityLink
+              brand={brand}
+              storeSlug={business.slug}
+              logoSize={48}
+              showName={false}
+            />
           </div>
           <p className="text-3xl" aria-hidden>
             ✓
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">{headline}</h1>
           {!confirmed ? (
-            <p className="mt-2 text-sm text-white/80">ร้านกำลังตรวจสอบรถและราคา</p>
+            <p className="mt-2 text-sm text-white/80">{t("booking.quotePending")}</p>
           ) : null}
         </div>
       </header>
 
       <main className="relative z-10 mx-auto -mt-6 max-w-lg space-y-4 px-4 pb-10">
         <section className="booking-review-card text-center">
-          <p className="text-xs text-muted">รหัสคำขอ</p>
+          <p className="text-xs text-muted">{t("bookingDetail.code")}</p>
           <p className="mt-1 text-xl font-semibold tracking-wide text-[color:var(--store-primary,#0F3D3E)]">
             {booking.bookingCode}
           </p>
@@ -106,17 +130,17 @@ export default async function BookingSuccessPage({
           </div>
           <dl className="mt-4 space-y-2 text-left text-sm">
             <Row
-              label="วันเวลา"
+              label={t("bookingDetail.schedule")}
               value={`${booking.startDate}${booking.startTime ? ` ${booking.startTime}` : ""}`}
             />
-            <Row label="รับที่" value={booking.pickupLocation} />
-            <Row label="ส่งที่" value={booking.dropoffLocation ?? "-"} />
+            <Row label={t("booking.pickup")} value={booking.pickupLocation} />
+            <Row label={t("booking.dropoff")} value={booking.dropoffLocation ?? "-"} />
           </dl>
         </section>
 
         {!confirmed ? (
           <section className="booking-review-card">
-            <p className="mb-3 text-sm font-semibold">ขั้นตอนถัดไป</p>
+            <p className="mb-3 text-sm font-semibold">{t("success.next")}</p>
             <ol className="space-y-0">
               {timeline.map((item, index) => (
                 <li key={item.label} className="relative flex gap-3 pb-4 last:pb-0">
@@ -140,31 +164,31 @@ export default async function BookingSuccessPage({
               ))}
             </ol>
             <p className="mt-2 text-xs leading-5 text-muted">
-              การส่งคำขอยังไม่ใช่การยืนยันการจอง — รอใบเสนอราคาจากร้าน
+              {t("booking.notConfirmed")}
             </p>
           </section>
         ) : (
           <p className="booking-review-card text-sm leading-6 text-muted">
-            การจองได้รับการยืนยันแล้ว สามารถดูรายละเอียดและชำระเงินได้
+            {t("success.title.confirmed")}
           </p>
         )}
 
         <div className="grid gap-3 sm:grid-cols-3">
           <Link href={`/booking/${token}`} className="booking-cta-gold">
-            ดูรายละเอียดการจอง
+            {t("success.viewDetails")}
           </Link>
           <Link
             href={myBookingsHref}
-            className="flex h-[3.15rem] items-center justify-center rounded-2xl bg-white text-sm font-semibold shadow-sm"
+            className="flex h-[3.15rem] items-center justify-center rounded-2xl bg-[color:var(--cx-surface)] text-sm font-semibold shadow-sm"
           >
-            การจองของฉัน
+            {t("success.myBookings")}
           </Link>
           {business.phone ? (
             <a
               href={`tel:${business.phone}`}
-              className="flex h-[3.15rem] items-center justify-center rounded-2xl bg-white text-sm font-semibold shadow-sm"
+              className="flex h-[3.15rem] items-center justify-center rounded-2xl bg-[color:var(--cx-surface)] text-sm font-semibold shadow-sm"
             >
-              ติดต่อร้าน
+              {t("success.contact")}
             </a>
           ) : (
             <button
@@ -172,14 +196,14 @@ export default async function BookingSuccessPage({
               disabled
               className="flex h-[3.15rem] items-center justify-center rounded-2xl bg-line text-sm text-muted"
             >
-              ติดต่อร้าน
+              {t("success.contact")}
             </button>
           )}
         </div>
 
         <ContactStoreLinks brand={brand} />
       </main>
-    </StoreBrandScope>
+    </CustomerExperienceShell>
   );
 }
 

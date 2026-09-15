@@ -226,7 +226,12 @@ async function main() {
       join(__dirname, "../src/components/storefront/PartnerStorefront.tsx"),
       "utf8",
     );
-    assert("CTA has dual actions", cta.includes("เที่ยวแนะนำ →") && cta.includes("เริ่มการจอง"));
+    assert(
+      "CTA has dual localized actions",
+      cta.includes('t("nav.travel")') &&
+        cta.includes('t("storefront.bookNow")') &&
+        cta.includes('href={`/s/${slug}/travel`}'),
+    );
     assert("CTA still uses ?book=1 via startBooking", cta.includes("?book=1"));
 
     // Availability scenarios

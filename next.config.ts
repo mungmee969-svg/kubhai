@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
       { pathname: "/brand/**" },
       { pathname: "/fleet/**" },
       { pathname: "/discovery/**" },
+      { pathname: "/home/**" },
+      { pathname: "/places/**" },
       { pathname: "/store/**" },
       { pathname: "/uploads/**" },
     ],

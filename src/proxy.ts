@@ -25,7 +25,12 @@ export function proxy(request: NextRequest) {
 
   if (pathname.startsWith("/store")) {
     // Store Admin login is public — do not mix with authenticated /store shell.
-    if (pathname === "/store/login" || pathname.startsWith("/store/login/")) {
+    if (
+      pathname === "/store/login" ||
+      pathname.startsWith("/store/login/") ||
+      pathname === "/store/signup" ||
+      pathname.startsWith("/store/signup/")
+    ) {
       return response;
     }
     if (!session) {

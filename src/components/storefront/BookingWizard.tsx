@@ -44,9 +44,11 @@ import {
   resolveDayStart,
   type DayPlan,
 } from "@/lib/booking/itinerary";
-import { resolveBusinessBranding } from "@/lib/domain/branding";
+import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
 import { resolveBookingPresentation } from "@/lib/domain/booking-presentation";
 import { resolveVehicleCoverUrl, resolveVehicleGallery } from "@/lib/domain/vehicle-image";
+import { localizedPackageText, type TripPackage } from "@/lib/domain/trip-package";
+import { packagePriceLabel } from "@/components/storefront/TripPackageCard";
 import { ServiceTypeIcon } from "@/components/storefront/ServiceTypeIcon";
 import { useCustomerPrefs } from "@/lib/i18n/CustomerPrefsProvider";
 import { customerLocationAddress, customerLocationTitle } from "@/lib/location/display";
@@ -86,6 +88,7 @@ type Props = {
   places: Place[];
   region: Region | null;
   province: Province | null;
+  tripPackages?: TripPackage[];
   initialSource?: BookingSource;
   prefill?: Prefill;
   loggedIn?: boolean;
@@ -99,14 +102,15 @@ export function BookingWizard({
   places,
   region,
   province,
+  tripPackages = [],
   initialSource = "DIRECT",
   prefill,
   loggedIn: _loggedIn = false,
 }: Props) {
   void _loggedIn; // Pilot: guest booking — login prop retained for callers, unused
-  const { t } = useCustomerPrefs();
+  const { t, locale } = useCustomerPrefs();
   const router = useRouter();
-  const brand = resolveBusinessBranding(business);
+  const brand = resolveCustomerStorefrontBranding(business);
   const presentation = resolveBookingPresentation({ business, province, region });
   const [draft, setDraft] = useState<BookingDraft>(() =>
     emptyBookingDraft({
@@ -268,6 +272,7 @@ export function BookingWizard({
 
   const multi = isMultiDayService(draft.serviceType);
   const selectedVehicle = vehicles.find((v) => v.id === draft.preferredVehicleId);
+  const selectedPackage = tripPackages.find((item) => item.id === draft.tripPackageId);
   const isReview = draft.step === BOOKING_WIZARD_MAX_STEP;
   const ctaLabel = isReview ? t("booking.submit") : t("auth.continue");
 
@@ -358,6 +363,21 @@ export function BookingWizard({
           </div>
         }
       >
+        {selectedPackage ? (
+          <div className="rounded-2xl bg-[color:var(--store-primary-soft,#E8F0EF)] px-4 py-3 text-sm text-[color:var(--cx-textPrimary)]">
+            <p className="text-xs text-[color:var(--cx-textSecondary)]">
+              {t("package.detail")}
+            </p>
+            <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
+              <p className="font-semibold">
+                {localizedPackageText(locale, selectedPackage.title)}
+              </p>
+              <p className="text-xs font-semibold">
+                {packagePriceLabel(selectedPackage, t).label}
+              </p>
+            </div>
+          </div>
+        ) : null}
         {draft.step > 1 ? (
           <button
             type="button"
@@ -1450,7 +1470,7 @@ function ContactSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  brand: ReturnType<typeof resolveBusinessBranding>;
+  brand: ReturnType<typeof resolveCustomerStorefrontBranding>;
 }) {
   const { t } = useCustomerPrefs();
   if (!open) return null;

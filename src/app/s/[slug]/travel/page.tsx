@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RememberStoreContext } from "@/components/brand/RememberStoreContext";
-import { StoreLogo } from "@/components/brand/StoreBrand";
+import { CustomerStoreIdentityLink } from "@/components/brand/CustomerStoreIdentityLink";
 import { CustomerExperienceShell } from "@/components/storefront/CustomerExperienceShell";
 import { PartnerCustomerNav } from "@/components/storefront/PartnerCustomerNav";
 import { PartnerTravelDiscovery } from "@/components/storefront/PartnerTravelDiscovery";
@@ -11,8 +10,11 @@ import { getStore } from "@/lib/data";
 import { publicTripPackagesFor } from "@/lib/data/public-trip-packages";
 import { resolveBookingPresentation } from "@/lib/domain/booking-presentation";
 import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
-import { allowsCustomerLocales } from "@/lib/domain/booking-entitlements";
-import { readCustomerLocaleCookie } from "@/lib/i18n/server";
+import {
+  allowsCustomerLocales,
+  allowsTripDiscovery,
+} from "@/lib/domain/booking-entitlements";
+import { readCustomerLocaleCookie, readCustomerThemeCookie } from "@/lib/i18n/server";
 import { translate } from "@/lib/i18n/translate";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +34,12 @@ export default async function PartnerTravelPage({ params }: Params) {
   const { slug } = await params;
   const data = await getStore().getPublicStore(slug);
   if (!data) notFound();
-  const session = await getCustomerSession();
+  if (!allowsTripDiscovery(data.business.subscriptionPlan)) notFound();
+  const [session, initialLocale, initialTheme] = await Promise.all([
+    getCustomerSession(),
+    readCustomerLocaleCookie(),
+    readCustomerThemeCookie(),
+  ]);
   const brand = resolveCustomerStorefrontBranding(data.business);
   const multilingual = allowsCustomerLocales(data.business.subscriptionPlan);
   const hasPackages = (await publicTripPackagesFor(data.business)).length > 0;
@@ -47,20 +54,20 @@ export default async function PartnerTravelPage({ params }: Params) {
       brand={brand}
       storeSlug={slug}
       multilingual={multilingual}
+      initialLocale={initialLocale}
+      initialTheme={initialTheme}
       className="min-h-dvh bg-[color:var(--store-paper,#F7F4EF)]"
     >
       <RememberStoreContext slug={slug} />
       <header className="border-b border-black/[0.04] bg-[color:var(--store-primary,#0F3D3E)] text-white">
         <div className="mx-auto max-w-[820px] space-y-3 px-4 py-3 md:px-5">
-          <div className="flex items-center gap-2.5">
-            <Link href={`/s/${slug}`} className="flex min-w-0 flex-1 items-center gap-2.5">
-              <StoreLogo brand={brand} size={36} className="bg-white shadow-sm" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{brand.businessName}</p>
-                <p className="truncate text-[11px] text-white/75">{presentation.placeLabel}</p>
-              </div>
-            </Link>
-          </div>
+          <CustomerStoreIdentityLink
+            brand={brand}
+            storeSlug={slug}
+            subtitle={presentation.placeLabel}
+            className="max-w-full"
+            subtitleClassName="text-white/75"
+          />
           <PartnerCustomerNav
             slug={slug}
             loggedIn={Boolean(session)}

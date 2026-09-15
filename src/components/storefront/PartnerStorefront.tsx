@@ -8,6 +8,7 @@ import { BookingWizard } from "@/components/storefront/BookingWizard";
 import { CustomerExperienceShell } from "@/components/storefront/CustomerExperienceShell";
 import { FeaturedTripPackages } from "@/components/storefront/FeaturedTripPackages";
 import { PartnerCustomerNav } from "@/components/storefront/PartnerCustomerNav";
+import { PartnerStoreRecommendations } from "@/components/storefront/PartnerStoreRecommendations";
 import { PartnerTravelDiscovery } from "@/components/storefront/PartnerTravelDiscovery";
 import { ServiceTypeIcon } from "@/components/storefront/ServiceTypeIcon";
 import {
@@ -18,8 +19,11 @@ import {
   type BookingDraft,
 } from "@/lib/booking/draft";
 import { resolveBookingPresentation } from "@/lib/domain/booking-presentation";
+import { allowsTripDiscovery } from "@/lib/domain/booking-entitlements";
 import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
 import { useCustomerPrefs } from "@/lib/i18n/CustomerPrefsProvider";
+import type { CustomerLocale } from "@/lib/i18n/locales";
+import type { CustomerTheme } from "@/lib/i18n/theme";
 import type { TripPackage } from "@/lib/domain/trip-package";
 import type { BookingSource, ServiceType } from "@/lib/domain/enums";
 import type {
@@ -55,6 +59,8 @@ export type PartnerStorefrontProps = {
   loggedIn?: boolean;
   /** storefront.multilingualUi entitlement — resolved from the plan on the server. */
   multilingual?: boolean;
+  initialLocale?: CustomerLocale;
+  initialTheme?: CustomerTheme;
 };
 
 /**
@@ -75,6 +81,8 @@ export function PartnerStorefront(props: PartnerStorefrontProps) {
         brand={brand}
         storeSlug={props.slug}
         multilingual={props.multilingual}
+        initialLocale={props.initialLocale}
+        initialTheme={props.initialTheme}
       >
         <BookingWizard {...props} />
       </CustomerExperienceShell>
@@ -86,6 +94,8 @@ export function PartnerStorefront(props: PartnerStorefrontProps) {
       brand={brand}
       storeSlug={props.slug}
       multilingual={props.multilingual}
+      initialLocale={props.initialLocale}
+      initialTheme={props.initialTheme}
       className="min-h-dvh"
     >
       <PartnerStoreHome {...props} />
@@ -108,6 +118,11 @@ function PartnerStoreHome({
   const { t, locale } = useCustomerPrefs();
   const brand = resolveCustomerStorefrontBranding(business);
   const presentation = resolveBookingPresentation({ business, province, region });
+  const showTravel = allowsTripDiscovery(business.subscriptionPlan);
+  const storeRecommendations = places.filter(
+    (place) => place.businessId === business.id && place.status === "ACTIVE",
+  );
+  const platformPlaces = places.filter((place) => place.businessId !== business.id);
   const [draftHint] = useState(() => {
     const draft = readBookingDraft(slug);
     return Boolean(draft && (draft.startDate || draft.pickup || draft.placeIds.length));
@@ -118,7 +133,7 @@ function PartnerStoreHome({
   const showCmsTagline =
     locale === "th" &&
     Boolean(presentation.displayTagline) &&
-    presentation.displayTagline !== t("storefront.heroTitle", { place: locationLabel });
+    presentation.displayTagline !== t("storefront.heroTitle");
 
   function startBooking(serviceType?: ServiceType) {
     if (serviceType) {
@@ -165,16 +180,14 @@ function PartnerStoreHome({
               loggedIn={loggedIn}
               active="home"
               showPackages={tripPackages.length > 0}
+              showTravel={showTravel}
             />
           </div>
 
           <div className="mt-7 max-w-md space-y-3">
             <h1 className="text-[1.65rem] font-semibold leading-tight tracking-tight md:text-[1.9rem]">
-              {t("storefront.heroTitle", { place: locationLabel })}
+              {showCmsTagline ? presentation.displayTagline : t("storefront.heroTitle")}
             </h1>
-            {showCmsTagline ? (
-              <p className="text-sm text-white/85">{presentation.displayTagline}</p>
-            ) : null}
             <p className="text-sm text-white/80">{t("storefront.heroSubtitle")}</p>
             <button
               type="button"
@@ -187,7 +200,7 @@ function PartnerStoreHome({
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto -mt-5 max-w-[820px] space-y-8 px-4 pb-16 md:px-5">
+      <main className="relative z-10 mx-auto max-w-[820px] space-y-8 px-4 pb-16 pt-6 md:px-5 md:pt-8">
         <FeaturedTripPackages packages={tripPackages} storeSlug={slug} mode="preview" />
 
         <section className="ui-card rounded-[1.5rem] bg-[color:var(--cx-surface,#fff)] p-4 shadow-sm md:p-5">
@@ -218,13 +231,21 @@ function PartnerStoreHome({
           </div>
         </section>
 
-        <PartnerTravelDiscovery
-          places={places}
-          provinceId={business.provinceId}
-          storeSlug={slug}
-          locationLabel={locationLabel}
-          mode="preview"
-        />
+        {showTravel ? (
+          <>
+            <PartnerStoreRecommendations
+              places={storeRecommendations}
+              storeSlug={slug}
+            />
+            <PartnerTravelDiscovery
+              places={platformPlaces}
+              provinceId={business.provinceId}
+              storeSlug={slug}
+              locationLabel={locationLabel}
+              mode="preview"
+            />
+          </>
+        ) : null}
 
         <section className="ui-card rounded-[1.25rem] bg-[color:var(--cx-surface,#fff)] px-4 py-4 text-center shadow-sm md:px-5 md:py-5">
           <p className="text-sm font-medium text-[color:var(--cx-textPrimary)]">
@@ -238,12 +259,14 @@ function PartnerStoreHome({
             >
               {draftHint ? t("storefront.continueBooking") : t("storefront.bookNow")}
             </button>
-            <Link
-              href={`/s/${slug}/travel`}
-              className="ui-press inline-flex h-12 w-full flex-1 items-center justify-center rounded-full bg-[color:var(--store-primary-soft,#E8F0EF)] text-sm font-semibold text-[color:var(--cx-brandFg,var(--store-primary,#0F3D3E))] sm:min-w-0"
-            >
-              {t("nav.travel")} →
-            </Link>
+            {showTravel ? (
+              <Link
+                href={`/s/${slug}/travel`}
+                className="ui-press inline-flex h-12 w-full flex-1 items-center justify-center rounded-full bg-[color:var(--store-primary-soft,#E8F0EF)] text-sm font-semibold text-[color:var(--cx-brandFg,var(--store-primary,#0F3D3E))] sm:min-w-0"
+              >
+                {t("nav.travel")} →
+              </Link>
+            ) : null}
           </div>
           {settings?.bookingNotes ? (
             <p className="mx-auto mt-3 max-w-md text-xs text-[color:var(--cx-textSecondary)]">

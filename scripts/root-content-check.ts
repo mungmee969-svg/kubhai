@@ -8,6 +8,8 @@ import { join } from "node:path";
 const root = process.cwd();
 const landing = readFileSync(join(root, "src/components/marketing/KubHaiLanding.tsx"), "utf8");
 const page = readFileSync(join(root, "src/app/page.tsx"), "utf8");
+const homepageConfig = readFileSync(join(root, "src/lib/domain/homepage-cms.ts"), "utf8");
+const homepage = `${landing}\n${homepageConfig}`;
 
 function assert(name: string, cond: boolean) {
   if (!cond) {
@@ -33,18 +35,25 @@ const forbidden = [
 ];
 
 assert("root uses KubHaiLanding", page.includes("KubHaiLanding"));
-assert("hero headline", landing.includes("เที่ยวเหนือ ไปกับขับให้"));
-assert("supporting copy", landing.includes("ค้นหาที่เที่ยว ร้านอาหาร คาเฟ่ ที่พัก"));
-assert("discovery prompt", landing.includes("ค้นหาแรงบันดาลใจ"));
-assert("transport partners section", landing.includes("พาร์ทเนอร์เดินทาง"));
-assert("local discovery", landing.includes("แนะนำในเชียงใหม่") || landing.includes("HomeDiscovery"));
-assert("customer login primary", landing.includes("เข้าสู่ระบบ") && landing.includes("/account"));
-assert("store CTA secondary", (landing.includes("สำหรับพาร์ทเนอร์") || landing.includes("สำหรับร้านค้า")) && landing.includes("/store/login"));
-assert("travel imagery", landing.includes("DISCOVERY_HERO_IMAGE") || landing.includes("/discovery/"));
-assert("not car-company only", landing.includes("เที่ยว • กิน • ช้อป • พัก • เดินทาง"));
+assert("approved Lanna hero headline", homepage.includes("ขับให้คุณค้นพบ") && homepage.includes("เสน่ห์แห่งล้านนา"));
+assert("short discovery copy", homepage.includes("เที่ยว กิน พัก เดินทาง"));
+assert("compact discovery prompt", homepage.includes("อยากไปไหน หรือกำลังหาอะไร?"));
+assert("four primary categories", ["ที่เที่ยว", "ร้านอาหาร", "คาเฟ่", "รถเช่า / บริการรถ"].every((label) => homepage.includes(label)));
+assert("transport partners section", homepage.includes("เดินทางต่อกับร้านรถที่เหมาะกับคุณ"));
+assert("local discovery", homepage.includes("แนะนำในเชียงใหม่"));
+assert(
+  "customer login primary",
+  landing.includes("เข้าสู่ระบบ") && landing.includes("platformLoginHref"),
+);
+assert(
+  "partner cards retain storefront route",
+  landing.includes("storefrontPath(store.slug)"),
+);
+assert("travel imagery uses replaceable local assets", landing.includes("/home/lanna-hero.jpg"));
+assert("not car-company only", homepage.includes("เที่ยว กิน พัก เดินทาง"));
 
 for (const phrase of forbidden) {
-  assert(`no public copy: ${phrase}`, !landing.includes(phrase));
+  assert(`no public copy: ${phrase}`, !homepage.includes(phrase));
 }
 
 if (process.exitCode) {

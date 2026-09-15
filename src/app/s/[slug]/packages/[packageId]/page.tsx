@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RememberStoreContext } from "@/components/brand/RememberStoreContext";
-import { StoreLogo } from "@/components/brand/StoreBrand";
+import { CustomerStoreIdentityLink } from "@/components/brand/CustomerStoreIdentityLink";
+import { LocationMapPreview } from "@/components/maps/LocationMapPreview";
 import { BookPackageButton } from "@/components/storefront/BookPackageButton";
 import { CustomerExperienceShell } from "@/components/storefront/CustomerExperienceShell";
 import { PartnerCustomerNav } from "@/components/storefront/PartnerCustomerNav";
@@ -20,7 +21,7 @@ import {
   localizedPackageText,
   packageDurationLabel,
 } from "@/lib/domain/trip-package";
-import { readCustomerLocaleCookie } from "@/lib/i18n/server";
+import { readCustomerLocaleCookie, readCustomerThemeCookie } from "@/lib/i18n/server";
 import { translate } from "@/lib/i18n/translate";
 
 export const dynamic = "force-dynamic";
@@ -49,8 +50,11 @@ export default async function PartnerPackageDetailPage({ params }: Params) {
   const pkg = await storeApi.getPublicTripPackage(data.business.id, packageId);
   if (!pkg) notFound();
 
-  const session = await getCustomerSession();
-  const locale = await readCustomerLocaleCookie();
+  const [session, locale, theme] = await Promise.all([
+    getCustomerSession(),
+    readCustomerLocaleCookie(),
+    readCustomerThemeCookie(),
+  ]);
   const t = (key: string, vars?: Record<string, string | number>) =>
     translate(locale, key, vars);
   const brand = resolveCustomerStorefrontBranding(data.business);
@@ -70,6 +74,14 @@ export default async function PartnerPackageDetailPage({ params }: Params) {
   const duration = packageDurationLabel(locale, pkg.days, pkg.nights);
   const passengers = packagePassengersLabel(pkg, t);
   const price = packagePriceLabel(pkg, t);
+  const mappedPlace = pkg.itinerary
+    .flatMap((day) => day.stops)
+    .map((stop) => data.places.find((place) => place.id === stop.placeId))
+    .find(
+      (place) =>
+        place?.latitude != null &&
+        place.longitude != null,
+    );
   const cover = pkg.coverImageUrl ?? pkg.galleryImageUrls[0] ?? null;
   const gallery = pkg.galleryImageUrls.filter((url, index, arr) => arr.indexOf(url) === index);
   const itinerary = [...pkg.itinerary].sort((a, b) => a.dayNumber - b.dayNumber);
@@ -79,20 +91,20 @@ export default async function PartnerPackageDetailPage({ params }: Params) {
       brand={brand}
       storeSlug={slug}
       multilingual={allowsCustomerLocales(data.business.subscriptionPlan)}
+      initialLocale={locale}
+      initialTheme={theme}
       className="min-h-dvh bg-[color:var(--store-paper,#F7F4EF)]"
     >
       <RememberStoreContext slug={slug} />
       <header className="border-b border-black/[0.04] bg-[color:var(--store-primary,#0F3D3E)] text-white">
         <div className="mx-auto max-w-[820px] space-y-3 px-4 py-3 md:px-5">
-          <div className="flex items-center gap-2.5">
-            <Link href={`/s/${slug}/packages`} className="flex min-w-0 flex-1 items-center gap-2.5">
-              <StoreLogo brand={brand} size={36} className="bg-white shadow-sm" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{t("package.listTitle")}</p>
-                <p className="truncate text-[11px] text-white/75">{presentation.placeLabel}</p>
-              </div>
-            </Link>
-          </div>
+          <CustomerStoreIdentityLink
+            brand={brand}
+            storeSlug={slug}
+            subtitle={presentation.placeLabel}
+            className="max-w-full"
+            subtitleClassName="text-white/75"
+          />
           <PartnerCustomerNav
             slug={slug}
             loggedIn={Boolean(session)}
@@ -146,7 +158,7 @@ export default async function PartnerPackageDetailPage({ params }: Params) {
             ) : null}
             <p
               className={`mt-3 text-sm font-semibold ${
-                price.quoteFirst
+                price.isQuoteFirst
                   ? "text-[color:var(--cx-textSecondary)]"
                   : "text-[color:var(--cx-textPrimary)]"
               }`}
@@ -178,6 +190,15 @@ export default async function PartnerPackageDetailPage({ params }: Params) {
               <h2 className="text-base font-semibold text-[color:var(--cx-textPrimary)]">
                 {t("package.itinerary")}
               </h2>
+              {mappedPlace ? (
+                <LocationMapPreview
+                  latitude={mappedPlace.latitude}
+                  longitude={mappedPlace.longitude}
+                  label={mappedPlace.name}
+                  notConfiguredLabel={t("maps.notConfigured")}
+                  coordinatesUnavailableLabel={t("maps.coordinatesUnavailable")}
+                />
+              ) : null}
               {itinerary.map((day) => {
                 const dayTitle = localizedPackageText(locale, day.title);
                 const dayDesc = localizedPackageText(locale, day.description);

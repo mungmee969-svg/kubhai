@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { BookingItineraryDays } from "@/components/booking/ItineraryDaysView";
+import { LocationMapPreview } from "@/components/maps/LocationMapPreview";
 import { Feedback } from "@/components/store-admin/ui/Feedback";
 import { AssignDrawer } from "@/components/store-admin/booking/AssignDrawer";
 import { markBookingOpened } from "@/components/store-admin/booking/BookingInboxCard";
@@ -53,6 +54,7 @@ const SECONDARY: BookingStatus[] = ["CANCELLED", "REJECTED"];
 
 export function BookingWorkspace({
   record,
+  tripPackageTitle,
   vehicles,
   drivers,
   places,
@@ -62,6 +64,7 @@ export function BookingWorkspace({
   driverJob,
 }: {
   record: BookingRecord;
+  tripPackageTitle?: string | null;
   vehicles: Vehicle[];
   drivers: Driver[];
   places: Place[];
@@ -232,6 +235,11 @@ export function BookingWorkspace({
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-medium tracking-wide text-muted">{booking.bookingCode}</p>
+            {tripPackageTitle ? (
+              <p className="mt-1 text-xs font-semibold text-[color:var(--store-primary,#0F3D3E)]">
+                แพ็กเกจ: {tripPackageTitle}
+              </p>
+            ) : null}
             <h1 className="mt-1 text-xl font-semibold text-[color:var(--store-primary,#0F3D3E)] sm:text-2xl">
               {booking.customerNameSnapshot}
             </h1>
@@ -408,6 +416,12 @@ export function BookingWorkspace({
                   startDate={booking.startDate}
                   endDate={booking.endDate}
                   letStorePlanTrip={booking.letStorePlanTrip}
+                />
+                <LocationMapPreview
+                  latitude={booking.pickupLat}
+                  longitude={booking.pickupLng}
+                  label={booking.pickupLocation || "จุดรับลูกค้า"}
+                  className="mt-4"
                 />
                 <div className="mt-4 space-y-2 border-t border-line pt-4">
                   <p className="text-sm font-medium text-navy-800">ปรับแผน / เพิ่มคำแนะนำ</p>

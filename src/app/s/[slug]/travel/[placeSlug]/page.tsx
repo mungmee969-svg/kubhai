@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RememberStoreContext } from "@/components/brand/RememberStoreContext";
-import { StoreLogo } from "@/components/brand/StoreBrand";
+import { CustomerStoreIdentityLink } from "@/components/brand/CustomerStoreIdentityLink";
 import { AddToTripButton } from "@/components/discovery/AddToTripButton";
 import { CustomerExperienceShell } from "@/components/storefront/CustomerExperienceShell";
 import { PartnerCustomerNav } from "@/components/storefront/PartnerCustomerNav";
@@ -10,7 +10,10 @@ import { getCustomerSession } from "@/lib/auth/customer-session";
 import { getStore } from "@/lib/data";
 import { resolveBookingPresentation } from "@/lib/domain/booking-presentation";
 import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
-import { allowsCustomerLocales } from "@/lib/domain/booking-entitlements";
+import {
+  allowsCustomerLocales,
+  allowsTripDiscovery,
+} from "@/lib/domain/booking-entitlements";
 import { publicTripPackagesFor } from "@/lib/data/public-trip-packages";
 import type { PlaceCategory } from "@/lib/domain/enums";
 import {
@@ -18,7 +21,11 @@ import {
   travelPlaceShortText,
 } from "@/lib/domain/travel-recommendations";
 import { isValidPlaceImageUrl } from "@/lib/domain/place-image";
-import { readCustomerLocaleCookie, serverT } from "@/lib/i18n/server";
+import {
+  readCustomerLocaleCookie,
+  readCustomerThemeCookie,
+  serverT,
+} from "@/lib/i18n/server";
 import { translate } from "@/lib/i18n/translate";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +59,7 @@ export default async function PartnerTravelPlacePage({ params }: Params) {
   const storeApi = getStore();
   const data = await storeApi.getPublicStore(slug);
   if (!data) notFound();
+  if (!allowsTripDiscovery(data.business.subscriptionPlan)) notFound();
   const row = await storeApi.getPublicPlaceBySlug(placeSlug);
   if (!row || row.place.status !== "ACTIVE") notFound();
 
@@ -82,17 +90,19 @@ export default async function PartnerTravelPlacePage({ params }: Params) {
   ].filter((url, index, arr): url is string => Boolean(url) && isValidPlaceImageUrl(url) && arr.indexOf(url) === index);
 
   const [
-    navTravel,
     categoryLabel,
     addressLabel,
     coordsReady,
     bookForTrip,
+    locale,
+    theme,
   ] = await Promise.all([
-    serverT("nav.travel"),
     serverT(PLACE_CATEGORY_KEYS[place.category]),
     serverT("place.address"),
     serverT("place.coordsReady"),
     serverT("travel.bookForTrip"),
+    readCustomerLocaleCookie(),
+    readCustomerThemeCookie(),
   ]);
 
   return (
@@ -100,20 +110,20 @@ export default async function PartnerTravelPlacePage({ params }: Params) {
       brand={brand}
       storeSlug={slug}
       multilingual={multilingual}
+      initialLocale={locale}
+      initialTheme={theme}
       className="min-h-dvh bg-[color:var(--store-paper,#F7F4EF)]"
     >
       <RememberStoreContext slug={slug} />
       <header className="border-b border-black/[0.04] bg-[color:var(--store-primary,#0F3D3E)] text-white">
         <div className="mx-auto max-w-[820px] space-y-3 px-4 py-3 md:px-5">
-          <div className="flex items-center gap-2.5">
-            <Link href={`/s/${slug}/travel`} className="flex min-w-0 flex-1 items-center gap-2.5">
-              <StoreLogo brand={brand} size={36} className="bg-white shadow-sm" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{navTravel}</p>
-                <p className="truncate text-[11px] text-white/75">{presentation.placeLabel}</p>
-              </div>
-            </Link>
-          </div>
+          <CustomerStoreIdentityLink
+            brand={brand}
+            storeSlug={slug}
+            subtitle={presentation.placeLabel}
+            className="max-w-full"
+            subtitleClassName="text-white/75"
+          />
           <PartnerCustomerNav
             slug={slug}
             loggedIn={Boolean(session)}

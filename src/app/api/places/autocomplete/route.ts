@@ -12,6 +12,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q")?.trim() ?? "";
   const placeId = searchParams.get("placeId")?.trim() ?? "";
+  const rawLatitude = searchParams.get("lat");
+  const rawLongitude = searchParams.get("lng");
+  const latitude = rawLatitude == null ? null : Number(rawLatitude);
+  const longitude = rawLongitude == null ? null : Number(rawLongitude);
 
   if (!isGooglePlacesConfigured()) {
     return NextResponse.json({
@@ -36,6 +40,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, configured: true, suggestions: [], place: null });
   }
 
-  const suggestions = await googlePlacesAutocomplete(q);
+  const suggestions = await googlePlacesAutocomplete(q, {
+    latitude: latitude != null && Number.isFinite(latitude) ? latitude : null,
+    longitude: longitude != null && Number.isFinite(longitude) ? longitude : null,
+  });
   return NextResponse.json({ ok: true, configured: true, suggestions, place: null });
 }

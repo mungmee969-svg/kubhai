@@ -305,8 +305,17 @@ function CustomerAuthFormsBody({
   const isPlatform = presentation.kind === "PLATFORM";
   const storeName = presentation.displayName;
   const coverUrl = presentation.partnerBrand?.coverUrl ?? null;
-  const loginSubtitle =
-    mode === "signup" ? presentation.signupSubtitle : presentation.loginSubtitle;
+  const loginSubtitle = isPlatform
+    ? mode === "signup"
+      ? presentation.signupSubtitle
+      : presentation.loginSubtitle
+    : mode === "signup"
+      ? t("auth.signupForStore", { store: presentation.shortName })
+      : t("auth.loginToViewBookings");
+  const heroTitle = isPlatform
+    ? presentation.heroTitle
+    : t("auth.travelWithStore", { store: presentation.shortName });
+  const heroBody = isPlatform ? presentation.heroBody : t("auth.manageBookingsBody");
 
   return (
     <div className="relative min-h-dvh bg-[color:var(--store-paper,#F7F4EF)] text-[color:var(--store-ink,#0F1724)]">
@@ -336,9 +345,9 @@ function CustomerAuthFormsBody({
                 {isPlatform ? "KubHai · ขับให้" : storeName}
               </p>
               <h1 className="max-w-md text-3xl font-semibold leading-tight tracking-tight">
-                {presentation.heroTitle}
+                {heroTitle}
               </h1>
-              <p className="max-w-sm text-sm leading-6 text-white/80">{presentation.heroBody}</p>
+              <p className="max-w-sm text-sm leading-6 text-white/80">{heroBody}</p>
             </div>
           </div>
           {isPlatform && presentation.poweredByKubHaiEnabled ? (
@@ -413,7 +422,9 @@ function CustomerAuthFormsBody({
                 <form onSubmit={onLogin} className="space-y-4">
                   <div>
                     <h2 className="text-xl font-semibold">{t("auth.loginTitle")}</h2>
-                    <p className="mt-1 text-sm text-muted">{presentation.loginSubtitle}</p>
+                    <p className="mt-1 text-sm text-muted">
+                      {isPlatform ? presentation.loginSubtitle : t("auth.loginToViewBookings")}
+                    </p>
                   </div>
                   <Field label={t("auth.phone")}>
                     <input

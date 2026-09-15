@@ -16,6 +16,14 @@ export const TRIP_PACKAGE_STATUSES = [
 
 export type TripPackageStatus = (typeof TRIP_PACKAGE_STATUSES)[number];
 
+export const TRIP_PACKAGE_PRICING_MODES = [
+  "FIXED_PRICE",
+  "STARTING_PRICE",
+  "QUOTE_FIRST",
+] as const;
+
+export type TripPackagePricingMode = (typeof TRIP_PACKAGE_PRICING_MODES)[number];
+
 /** Required Thai + optional EN/ZH marketing copy. */
 export type LocalizedText = {
   th: string;
@@ -52,7 +60,8 @@ export type TripPackageDay = {
 
 /**
  * Sellable multi-day trip product for a storefront.
- * Quote-first by default: startingPrice may be null; never auto-confirms bookings.
+ * Customer-facing package pricing. Amounts use the existing whole-THB integer
+ * convention; booking still enters the normal quotation/payment workflow.
  */
 export type TripPackage = {
   id: Uuid;
@@ -65,9 +74,9 @@ export type TripPackage = {
   passengerMin: number;
   passengerMax: number;
   vehicleCategoryHint: string | null;
-  /** null = quote-first / ask store */
-  startingPrice: number | null;
-  quoteFirst: boolean;
+  pricingMode: TripPackagePricingMode;
+  /** Required positive integer for FIXED_PRICE/STARTING_PRICE; null for QUOTE_FIRST. */
+  priceAmount: number | null;
   coverImageUrl: string | null;
   galleryImageUrls: string[];
   title: LocalizedText;
@@ -91,8 +100,8 @@ export type TripPackageWriteInput = {
   passengerMin: number;
   passengerMax: number;
   vehicleCategoryHint?: string | null;
-  startingPrice?: number | null;
-  quoteFirst?: boolean;
+  pricingMode: TripPackagePricingMode;
+  priceAmount?: number | null;
   coverImageUrl?: string | null;
   galleryImageUrls?: string[];
   title: LocalizedText;
@@ -230,6 +239,7 @@ export function mapPackageToBookingDraftPrefill(
       : Array.from({ length: Math.max(1, pkg.days) }, (_, i) => emptyDayPlan(i + 1, ""));
 
   return {
+    tripPackageId: pkg.id,
     serviceType: "MULTI_DAY_TRIP",
     multiDay: pkg.days > 1,
     numberOfDays: Math.max(1, pkg.days),

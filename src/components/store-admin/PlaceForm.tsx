@@ -35,7 +35,9 @@ export function PlaceForm({
   const [area, setArea] = useState(place?.area ?? "");
   const [latitude, setLatitude] = useState(place?.latitude != null ? String(place.latitude) : "");
   const [longitude, setLongitude] = useState(place?.longitude != null ? String(place.longitude) : "");
-  const [googlePlaceId, setGooglePlaceId] = useState<string | null>(null);
+  const [googlePlaceId, setGooglePlaceId] = useState<string | null>(
+    place?.googlePlaceId ?? null,
+  );
   const initialImages = (() => {
     const urls = [...(place?.imageUrls ?? [])];
     if (place?.coverImageUrl && !urls.includes(place.coverImageUrl)) {
@@ -279,7 +281,7 @@ export function PlaceForm({
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-        แสดงลูกค้า
+        แสดงในหน้าร้าน
       </label>
 
       <Feedback error={error} />
@@ -303,7 +305,7 @@ export function PlaceForm({
             }}
             className="h-11 rounded-xl bg-paper text-sm"
           >
-            {place.status === "HIDDEN" ? "แสดงลูกค้า" : "ซ่อนจากลูกค้า"}
+            {place.status === "HIDDEN" ? "แสดงในหน้าร้าน" : "ซ่อนจากหน้าร้าน"}
           </button>
           <button
             type="button"

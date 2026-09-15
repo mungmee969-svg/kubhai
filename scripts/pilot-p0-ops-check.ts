@@ -72,7 +72,11 @@ async function main() {
       "token page claim stays partner-scoped",
       bookingPage.includes("storeSlug={business.slug}"),
     );
-    assert("token page uses StoreBrandScope", bookingPage.includes("StoreBrandScope"));
+    assert(
+      "token page uses partner-scoped Customer CX shell",
+      bookingPage.includes("CustomerExperienceShell") &&
+        bookingPage.includes("storeSlug={business.slug}"),
+    );
 
     const accountBanner = readFileSync(
       path.join(process.cwd(), "src/components/booking/BookingAccountBanner.tsx"),

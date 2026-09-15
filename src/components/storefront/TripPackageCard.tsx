@@ -24,7 +24,7 @@ export type TripPackageCardView = {
   highlights: string[];
   /** Resolved price line — quote-first stores show the ask-for-quote label */
   priceLabel: string;
-  quoteFirst: boolean;
+  isQuoteFirst: boolean;
   ctaLabel: string;
   noImageLabel: string;
 };
@@ -43,15 +43,19 @@ export function formatPackagePrice(amount: number): string {
  * packages without a starting price both fall back to the ask-the-store label.
  */
 export function packagePriceLabel(
-  pkg: Pick<TripPackage, "quoteFirst" | "startingPrice">,
+  pkg: Pick<TripPackage, "pricingMode" | "priceAmount">,
   t: PackageTranslate,
-): { label: string; quoteFirst: boolean } {
-  if (pkg.quoteFirst || pkg.startingPrice == null) {
-    return { label: t("package.quoteFirst"), quoteFirst: true };
+): { label: string; isQuoteFirst: boolean } {
+  if (pkg.pricingMode === "QUOTE_FIRST" || pkg.priceAmount == null) {
+    return { label: t("package.quoteFirst"), isQuoteFirst: true };
   }
+  const price = formatPackagePrice(pkg.priceAmount);
   return {
-    label: t("package.startingPrice", { price: formatPackagePrice(pkg.startingPrice) }),
-    quoteFirst: false,
+    label:
+      pkg.pricingMode === "FIXED_PRICE"
+        ? t("package.fixedPrice", { price })
+        : t("package.startingPrice", { price }),
+    isQuoteFirst: false,
   };
 }
 
@@ -83,7 +87,7 @@ export function buildTripPackageCardView(
     passengersLabel: packagePassengersLabel(pkg, t),
     highlights: localizedPackageList(locale, pkg.highlights),
     priceLabel: price.label,
-    quoteFirst: price.quoteFirst,
+    isQuoteFirst: price.isQuoteFirst,
     ctaLabel: t("package.viewDetail"),
     noImageLabel: t("package.gallery"),
   };
@@ -94,12 +98,16 @@ export function TripPackageCard({
   width = "carousel",
 }: {
   view: TripPackageCardView;
-  /** carousel = fixed peek widths, block = fills its container (mobile preview) */
-  width?: "carousel" | "block";
+  /** single = compact 16:9 feature; responsive = mobile peek + desktop grid. */
+  width?: "carousel" | "single" | "responsive" | "block";
 }) {
   const body = (
     <>
-      <div className="relative aspect-[16/10] overflow-hidden bg-[color:var(--store-paper,#F7F4EF)]">
+      <div
+        className={`relative overflow-hidden bg-[color:var(--store-paper,#F7F4EF)] ${
+          width === "single" ? "aspect-video" : "aspect-[16/10]"
+        }`}
+      >
         {view.coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={view.coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -143,9 +151,11 @@ export function TripPackageCard({
   );
 
   const shell = `flex flex-col overflow-hidden rounded-2xl bg-[color:var(--cx-surface,#fff)] shadow-sm ring-1 ring-[color:var(--cx-border,rgba(0,0,0,0.08))] ${
-    width === "carousel"
-      ? "w-[min(74vw,272px)] shrink-0 snap-start md:w-[236px]"
-      : "w-full"
+    width === "block" || width === "single"
+      ? "w-full"
+      : width === "responsive"
+        ? "w-[min(82vw,300px)] shrink-0 snap-start md:w-full"
+        : "w-[min(74vw,272px)] shrink-0 snap-start md:w-[236px]"
   }`;
 
   return (
@@ -160,7 +170,7 @@ export function TripPackageCard({
       <div className="mt-auto flex items-center justify-between gap-2 px-3 pb-3">
         <p
           className={`min-w-0 truncate text-[11px] font-semibold ${
-            view.quoteFirst
+            view.isQuoteFirst
               ? "text-[color:var(--cx-textSecondary,#6b7280)]"
               : "text-[color:var(--cx-textPrimary,#0F1724)]"
           }`}

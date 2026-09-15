@@ -21,6 +21,7 @@ import { uploadImageAction } from "@/lib/actions/ops";
 import type {
   TripPackage,
   TripPackageDay,
+  TripPackagePricingMode,
   TripPackageWriteInput,
 } from "@/lib/domain/trip-package";
 import type { Place } from "@/lib/domain/types";
@@ -164,9 +165,11 @@ export function TripPackageForm({
   const [passengerMin, setPassengerMin] = useState(String(pkg?.passengerMin ?? 1));
   const [passengerMax, setPassengerMax] = useState(String(pkg?.passengerMax ?? 4));
   const [vehicleCategoryHint, setVehicleCategoryHint] = useState(pkg?.vehicleCategoryHint ?? "");
-  const [quoteFirst, setQuoteFirst] = useState(pkg?.quoteFirst ?? true);
-  const [startingPrice, setStartingPrice] = useState(
-    pkg?.startingPrice != null ? String(pkg.startingPrice) : "",
+  const [pricingMode, setPricingMode] = useState<TripPackagePricingMode>(
+    pkg?.pricingMode ?? "QUOTE_FIRST",
+  );
+  const [priceAmount, setPriceAmount] = useState(
+    pkg?.priceAmount != null ? String(pkg.priceAmount) : "",
   );
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(pkg?.coverImageUrl ?? null);
   const [galleryImageUrls, setGalleryImageUrls] = useState<string[]>(pkg?.galleryImageUrls ?? []);
@@ -197,7 +200,7 @@ export function TripPackageForm({
 
   const previewPackage: TripPackage = useMemo(() => {
     const now = pkg?.updatedAt ?? new Date().toISOString();
-    const price = quoteFirst || !startingPrice.trim() ? null : Number(startingPrice);
+    const price = pricingMode === "QUOTE_FIRST" || !priceAmount.trim() ? null : Number(priceAmount);
     return {
       id: pkg?.id ?? "preview",
       businessId,
@@ -209,8 +212,8 @@ export function TripPackageForm({
       passengerMin: positiveInt(passengerMin, 1, 1),
       passengerMax: positiveInt(passengerMax, 1, positiveInt(passengerMin, 1, 1)),
       vehicleCategoryHint: vehicleCategoryHint.trim() || null,
-      startingPrice: Number.isFinite(price) ? price : null,
-      quoteFirst,
+      pricingMode,
+      priceAmount: Number.isFinite(price) ? price : null,
       coverImageUrl: coverImageUrl ?? galleryImageUrls[0] ?? null,
       galleryImageUrls,
       title: toLocalizedRequired(title),
@@ -242,8 +245,8 @@ export function TripPackageForm({
     passengerMax,
     passengerMin,
     pkg,
-    quoteFirst,
-    startingPrice,
+    priceAmount,
+    pricingMode,
     summary,
     title,
     vehicleCategoryHint,
@@ -272,8 +275,11 @@ export function TripPackageForm({
         }
       }
     }
-    if (!quoteFirst && startingPrice.trim() && !Number.isFinite(Number(startingPrice))) {
-      return "ราคาเริ่มต้นไม่ถูกต้อง";
+    if (pricingMode !== "QUOTE_FIRST") {
+      const amount = Number(priceAmount);
+      if (!priceAmount.trim() || !Number.isInteger(amount) || amount <= 0) {
+        return "กรุณาระบุราคาเป็นจำนวนเต็มมากกว่า 0 บาท";
+      }
     }
     return null;
   }
@@ -288,8 +294,8 @@ export function TripPackageForm({
       passengerMin: min,
       passengerMax: positiveInt(passengerMax, min, min),
       vehicleCategoryHint: vehicleCategoryHint.trim() || null,
-      quoteFirst,
-      startingPrice: quoteFirst || !startingPrice.trim() ? null : Number(startingPrice),
+      pricingMode,
+      priceAmount: pricingMode === "QUOTE_FIRST" ? null : Number(priceAmount),
       coverImageUrl: coverImageUrl ?? galleryImageUrls[0] ?? null,
       galleryImageUrls,
       title: toLocalizedRequired(title),
@@ -829,27 +835,39 @@ export function TripPackageForm({
       {section === "pricing" ? (
         <section className="space-y-3 rounded-2xl bg-white p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-navy-800">ราคาและเงื่อนไข</h2>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={quoteFirst}
-              onChange={(e) => setQuoteFirst(e.target.checked)}
-            />
-            ขอใบเสนอราคาก่อน (ไม่แสดงราคาคงที่)
+          <label className="block text-sm text-muted">
+            รูปแบบราคา
+            <select
+              className="admin-input mt-1"
+              value={pricingMode}
+              onChange={(event) =>
+                setPricingMode(event.target.value as TripPackagePricingMode)
+              }
+            >
+              <option value="FIXED_PRICE">ราคาคงที่ / ทริป</option>
+              <option value="STARTING_PRICE">ราคาเริ่มต้น</option>
+              <option value="QUOTE_FIRST">ขอใบเสนอราคา</option>
+            </select>
           </label>
           <label className="block text-sm text-muted">
-            ราคาเริ่มต้น (บาท) — ใช้เมื่อไม่ได้เลือกขอใบเสนอราคาก่อน
+            จำนวนเงิน (บาท)
             <input
               className="admin-input mt-1"
               inputMode="numeric"
-              disabled={quoteFirst}
-              value={startingPrice}
-              onChange={(e) => setStartingPrice(e.target.value)}
-              placeholder={quoteFirst ? "ปิดอยู่ — ใช้รูปแบบขอใบเสนอราคา" : "เช่น 12000"}
+              disabled={pricingMode === "QUOTE_FIRST"}
+              value={priceAmount}
+              onChange={(event) => setPriceAmount(event.target.value.replace(/[^\d]/g, ""))}
+              placeholder={
+                pricingMode === "QUOTE_FIRST" ? "ไม่ต้องระบุจำนวนเงิน" : "เช่น 12900"
+              }
             />
           </label>
           <p className="text-xs text-muted">
-            ราคาจริงยังสรุปในใบเสนอราคาของร้านเสมอ — ระบบไม่คำนวณหรือยืนยันราคาแทน
+            {pricingMode === "FIXED_PRICE"
+              ? "แสดงเป็นราคาต่อทริป แต่ยังส่งคำขอผ่านขั้นตอนใบเสนอราคาเดิม"
+              : pricingMode === "STARTING_PRICE"
+                ? "แสดงว่าเป็นราคาเริ่มต้น ราคาสุดท้ายยืนยันในใบเสนอราคา"
+                : "ไม่แสดงตัวเลข ลูกค้าจะเห็นข้อความขอใบเสนอราคา"}
           </p>
 
           <label className="block text-sm text-muted">

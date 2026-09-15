@@ -5,13 +5,15 @@
 
 "use client";
 
+import Link from "next/link";
 import type { BookingWizardStep } from "@/lib/booking/draft";
 import type { BookingPresentation } from "@/lib/domain/booking-presentation";
 import { accessibleOnPrimary } from "@/lib/domain/booking-presentation";
-import { StoreLogo } from "@/components/brand/StoreBrand";
+import { CustomerStoreIdentityLink } from "@/components/brand/CustomerStoreIdentityLink";
 import { BookingProgress } from "@/components/storefront/BookingProgress";
 import { CustomerMobilePrefsButton } from "@/components/storefront/CustomerPrefsControls";
 import { useCustomerPrefs } from "@/lib/i18n/CustomerPrefsProvider";
+import { storefrontPath } from "@/lib/domain/storefront-url";
 
 export function bookingAtmosphereClass(step: BookingWizardStep): string {
   if (step <= 2) return "booking-atm-trip";
@@ -83,15 +85,12 @@ export function BookingWizardChrome({
           style={{ color: onPrimary.ink }}
         >
           <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <StoreLogo brand={brand} size={36} className="bg-white shadow-sm" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold tracking-tight">{brand.businessName}</p>
-                <p className="truncate text-[11px]" style={{ color: onPrimary.muted }}>
-                  {placeLabel}
-                </p>
-              </div>
-            </div>
+            <CustomerStoreIdentityLink
+              brand={brand}
+              storeSlug={brand.slug}
+              subtitle={placeLabel}
+              subtitleClassName="text-white/75"
+            />
             <div className="booking-header-actions flex items-center gap-2">
               <CustomerMobilePrefsButton />
               <button
@@ -103,6 +102,12 @@ export function BookingWizardChrome({
               </button>
             </div>
           </div>
+          <Link
+            href={storefrontPath(brand.slug)}
+            className="mt-3 inline-flex min-h-10 items-center text-xs font-semibold text-white/85 underline-offset-4 hover:underline"
+          >
+            {t("booking.storeHome")}
+          </Link>
 
           {step === 1 ? (
             <div className="pb-9 pt-5 md:pb-10 md:pt-6">

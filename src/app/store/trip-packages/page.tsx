@@ -190,9 +190,11 @@ export default async function TripPackagesPage({
                   </span>
                   <span className="text-muted">
                     {" · "}
-                    {pkg.quoteFirst || pkg.startingPrice == null
+                    {pkg.pricingMode === "QUOTE_FIRST" || pkg.priceAmount == null
                       ? "ขอใบเสนอราคา"
-                      : `เริ่มต้น ฿${pkg.startingPrice.toLocaleString("th-TH")}`}
+                      : pkg.pricingMode === "FIXED_PRICE"
+                        ? `฿${pkg.priceAmount.toLocaleString("th-TH")} / ทริป`
+                        : `เริ่มต้น ฿${pkg.priceAmount.toLocaleString("th-TH")}`}
                   </span>
                 </p>
               </div>

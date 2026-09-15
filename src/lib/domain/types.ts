@@ -204,6 +204,97 @@ export type BusinessUser = {
   active: boolean;
 };
 
+export type SaasSubscriptionStatus =
+  | "PENDING_PAYMENT"
+  | "ACTIVE"
+  | "PAST_DUE"
+  | "SUSPENDED"
+  | "CANCELLED";
+
+export type SaasInvoiceStatus =
+  | "PENDING"
+  | "AWAITING_REVIEW"
+  | "PAID"
+  | "REJECTED"
+  | "OVERDUE"
+  | "CANCELLED";
+
+export type SaasSubscription = {
+  id: Uuid;
+  businessId: Uuid;
+  planId: "starter" | "pro" | "business";
+  status: SaasSubscriptionStatus;
+  currentPeriodStart: IsoDateTime | null;
+  currentPeriodEnd: IsoDateTime | null;
+  nextDueAt: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+};
+
+export type SaasBillingPeriod = {
+  id: Uuid;
+  businessId: Uuid;
+  subscriptionId: Uuid;
+  planIdSnapshot: "starter" | "pro" | "business";
+  planNameSnapshot: string;
+  amountThb: number;
+  currency: "THB";
+  periodStart: IsoDateTime;
+  periodEnd: IsoDateTime;
+  dueAt: IsoDateTime;
+  status: SaasInvoiceStatus;
+  createdAt: IsoDateTime;
+  paidAt: IsoDateTime | null;
+};
+
+export type SaasPaymentProofStatus =
+  | "AWAITING_REVIEW"
+  | "APPROVED"
+  | "REJECTED";
+
+export type SaasPaymentProof = {
+  id: Uuid;
+  businessId: Uuid;
+  billingPeriodId: Uuid;
+  expectedAmountThb: number;
+  submittedAmountThb: number;
+  originalFileName: string;
+  mime: "image/jpeg" | "image/png" | "image/webp";
+  imageDataUrl: string;
+  submittedAt: IsoDateTime;
+  submittedByUserId: Uuid;
+  status: SaasPaymentProofStatus;
+  reviewedAt: IsoDateTime | null;
+  reviewedByUserId: Uuid | null;
+  rejectionReason: string | null;
+  providerVerificationResult: Record<string, unknown> | null;
+  duplicateOfProofId: Uuid | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+};
+
+export type SaasPayment = {
+  id: Uuid;
+  businessId: Uuid;
+  subscriptionId: Uuid;
+  billingPeriodId: Uuid;
+  paymentProofId: Uuid;
+  amountThb: number;
+  currency: "THB";
+  reference: string;
+  paidAt: IsoDateTime;
+  approvedByUserId: Uuid;
+  createdAt: IsoDateTime;
+};
+
+export type MerchantProvisioning = {
+  idempotencyKey: string;
+  ownerUserId: Uuid;
+  businessId: Uuid;
+  subscriptionId: Uuid;
+  createdAt: IsoDateTime;
+};
+
 export type Vehicle = {
   id: Uuid;
   businessId: Uuid;
@@ -301,6 +392,8 @@ export type Booking = {
   bookingCode: string;
   securePublicToken: string;
   clientRequestId: string;
+  /** Optional origin product; booking remains durable if the package is later unpublished. */
+  tripPackageId: Uuid | null;
   customerId: Uuid | null;
   /** Platform CustomerAccount ownership — separate from per-store CRM Customer. */
   customerAccountId: Uuid | null;
@@ -411,10 +504,23 @@ export type RecommendedPeriod = "DAY" | "EVENING" | "NIGHT";
 /** PLACE = specific venue; GUIDE/AREA/COLLECTION/INSPIRATION = editorial concepts (not fake businesses). */
 export type PlaceKind = "PLACE" | "GUIDE" | "AREA" | "COLLECTION" | "INSPIRATION";
 
+export type PlaceSourceType = "PLATFORM" | "AGENT";
+export type PlacePlatformModerationStatus =
+  | "NOT_SUBMITTED"
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "REJECTED";
+
 export type Place = {
   id: Uuid;
   /** null = KubHai platform / editorial place (not owned by a transport store) */
   businessId: Uuid | null;
+  sourceType: PlaceSourceType;
+  platformModerationStatus: PlacePlatformModerationStatus;
+  platformSubmittedAt: IsoDateTime | null;
+  platformReviewedAt: IsoDateTime | null;
+  platformReviewedByUserId: Uuid | null;
+  platformRejectionReason: string | null;
   provinceId: Uuid;
   category: PlaceCategory;
   subcategory: string | null;
@@ -669,6 +775,7 @@ export type NotificationRead = {
 export type BookingRequestInput = {
   businessSlug: string;
   clientRequestId: string;
+  tripPackageId?: string | null;
   serviceType: ServiceType;
   startDate: string;
   startTime: string | null;
@@ -743,6 +850,7 @@ export type {
   TripPackage,
   TripPackageDay,
   TripPackageListFilter,
+  TripPackagePricingMode,
   TripPackageStatus,
   TripPackageStop,
   TripPackageUpdateInput,

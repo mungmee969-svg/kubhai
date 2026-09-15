@@ -4,7 +4,7 @@ import { LOCAL_DEV_PASSWORD } from "@/lib/data/seed";
 import { LoginForm } from "@/components/auth/LoginForm";
 
 export const metadata = {
-  title: "เข้าสู่ระบบร้าน | KubHai",
+  title: "เข้าสู่ระบบจัดการ | KubHai",
 };
 
 export default function StoreLoginPage() {
@@ -13,9 +13,10 @@ export default function StoreLoginPage() {
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6 py-12">
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark size={88} priority />
-          <h1 className="mt-5 text-2xl font-semibold">เข้าสู่ระบบร้าน</h1>
+          <h1 className="mt-5 text-2xl font-semibold">เข้าสู่ระบบจัดการ</h1>
           <p className="mt-2 text-sm text-white/70">
-            สำหรับเจ้าของร้าน / ผู้จัดการ / พนักงาน — ไม่ใช่หน้าลูกค้า
+            ใช้สำหรับ Platform Owner เจ้าของร้าน ผู้จัดการ และพนักงาน
+            ระบบจะพาไปยังหน้าจัดการตามสิทธิ์ของบัญชี
           </p>
         </div>
         <LoginForm />
