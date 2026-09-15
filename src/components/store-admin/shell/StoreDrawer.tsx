@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { NavBadgeCounts } from "./StoreNavLinks";
 import { STORE_NAV } from "./nav";
@@ -34,120 +33,88 @@ export function StoreDrawer({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const visible = STORE_NAV.filter((item) => !hiddenHrefs?.includes(item.href));
-
-  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const onPointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
+    document.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = previous;
+      document.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
 
-  const drawer = open ? (
-    <div
-      id="store-mobile-drawer"
-      role="dialog"
-      aria-modal="true"
-      aria-label="เมนูร้าน"
-      className="lg:hidden"
-      style={{ position: "fixed", inset: 0, zIndex: 2147483000 }}
-    >
-      <button
-        type="button"
-        aria-label="ปิดเมนู"
-        onClick={() => setOpen(false)}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, background: "rgba(0,22,62,.52)" }}
-      />
-      <aside
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          left: 0,
-          width: "min(84vw, 320px)",
-          height: "100dvh",
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          background: "#fff",
-          color: "#01244f",
-          boxShadow: "0 20px 60px rgba(0,0,0,.28)",
-        }}
-      >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
-          <p className="min-w-0 truncate text-base font-semibold text-navy-800">{businessName}</p>
-          <button type="button" onClick={() => setOpen(false)} aria-label="ปิดเมนู" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-2xl leading-none text-navy-800">×</button>
-        </div>
-
-        <nav style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: "12px" }}>
-          {visible.map((item) => {
-            const active = isActive(pathname, item.href, "exact" in item && item.exact);
-            const count = badgeForHref(item.href, badges);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                aria-current={active ? "page" : undefined}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  width: "100%",
-                  minHeight: 44,
-                  marginBottom: 4,
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  color: "#01244f",
-                  background: active ? "#f3ead4" : "transparent",
-                  fontSize: 14,
-                  fontWeight: active ? 700 : 500,
-                  textDecoration: "none",
-                }}
-              >
-                <span style={{ flex: 1, minWidth: 0 }}>{item.label}</span>
-                {count ? <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-navy-950">{count > 99 ? "99+" : count}</span> : null}
-              </Link>
-            );
-          })}
-          {storeSlug ? (
-            <a
-              href={storefrontPath(storeSlug)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setOpen(false)}
-              style={{ display: "block", minHeight: 44, padding: "10px 12px", borderRadius: 12, color: "#01244f", fontSize: 14, fontWeight: 600, textDecoration: "none" }}
-            >
-              ↗ หน้าร้านของฉัน
-            </a>
-          ) : null}
-        </nav>
-      </aside>
-    </div>
-  ) : null;
-
   return (
-    <>
+    <div ref={rootRef} className="relative shrink-0 lg:hidden">
       <button
         type="button"
-        className="h-10 shrink-0 rounded-xl border border-line bg-white px-3 text-sm text-navy-800 lg:hidden"
-        onClick={() => setOpen(true)}
+        className="h-10 rounded-xl border border-line bg-white px-3 text-sm text-navy-800"
+        onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        aria-controls="store-mobile-drawer"
+        aria-controls="store-mobile-menu"
       >
         เมนู
       </button>
-      {mounted && drawer ? createPortal(drawer, document.body) : null}
-    </>
+
+      {open ? (
+        <div
+          id="store-mobile-menu"
+          role="dialog"
+          aria-label="เมนูร้าน"
+          className="absolute left-0 top-[calc(100%+0.75rem)] z-[100] w-[min(84vw,320px)] overflow-hidden rounded-2xl border border-line bg-white shadow-2xl"
+          style={{ color: "#01244f" }}
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-line bg-white px-4 py-3">
+            <p className="min-w-0 truncate text-sm font-semibold text-navy-800">{businessName}</p>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="ปิดเมนู"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-xl leading-none text-navy-800"
+            >
+              ×
+            </button>
+          </div>
+
+          <nav className="max-h-[min(68vh,560px)] overflow-y-auto overscroll-contain bg-white p-2">
+            {visible.map((item) => {
+              const active = isActive(pathname, item.href, "exact" in item && item.exact);
+              const count = badgeForHref(item.href, badges);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  aria-current={active ? "page" : undefined}
+                  className={`mb-1 flex min-h-11 w-full items-center rounded-xl px-3 py-2.5 text-sm text-navy-800 ${active ? "bg-store-soft font-semibold" : "font-medium hover:bg-paper"}`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {count ? <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-navy-950">{count > 99 ? "99+" : count}</span> : null}
+                </Link>
+              );
+            })}
+            {storeSlug ? (
+              <a
+                href={storefrontPath(storeSlug)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setOpen(false)}
+                className="block min-h-11 rounded-xl px-3 py-2.5 text-sm font-semibold text-navy-800 hover:bg-paper"
+              >
+                ↗ หน้าร้านของฉัน
+              </a>
+            ) : null}
+          </nav>
+        </div>
+      ) : null}
+    </div>
   );
 }
