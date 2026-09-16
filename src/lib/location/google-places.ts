@@ -1,9 +1,8 @@
 /**
- * Google Places helpers (server boundary used by the app autocomplete endpoint).
+ * Google Places helpers (server boundary used by the app places endpoint).
  *
- * Production currently uses the referrer-restricted browser key configured as
- * NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. Keep GOOGLE_MAPS_API_KEY as an optional
- * server-key override for a future dedicated Places server credential.
+ * Prefer GOOGLE_MAPS_API_KEY for server calls. NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+ * remains a compatibility fallback while production credentials are migrated.
  */
 
 import type { LocationSuggestion } from "@/lib/location/provider";
@@ -20,9 +19,6 @@ function googleRequestHeaders(key: string, fieldMask: string) {
   return {
     "X-Goog-Api-Key": key,
     "X-Goog-FieldMask": fieldMask,
-    // The production browser key is restricted to kubhai.org. Google validates
-    // website-restricted keys from the HTTP referrer. A future dedicated
-    // GOOGLE_MAPS_API_KEY can replace this without changing callers.
     Referer: "https://www.kubhai.org/",
   };
 }
@@ -86,22 +82,9 @@ export async function googlePlacesAutocomplete(
     for (const item of data.suggestions ?? []) {
       const pred = item.placePrediction;
       if (!pred?.placeId) continue;
-      const label =
-        pred.structuredFormat?.mainText?.text?.trim() ||
-        pred.text?.text?.trim() ||
-        "สถานที่";
-      const address =
-        pred.structuredFormat?.secondaryText?.text?.trim() ||
-        pred.text?.text?.trim() ||
-        "";
-      out.push({
-        placeId: pred.placeId,
-        label,
-        address,
-        latitude: 0,
-        longitude: 0,
-        placeType: "google_place",
-      });
+      const label = pred.structuredFormat?.mainText?.text?.trim() || pred.text?.text?.trim() || "สถานที่";
+      const address = pred.structuredFormat?.secondaryText?.text?.trim() || pred.text?.text?.trim() || "";
+      out.push({ placeId: pred.placeId, label, address, latitude: 0, longitude: 0, placeType: "google_place" });
     }
     return out;
   } catch {
@@ -109,23 +92,15 @@ export async function googlePlacesAutocomplete(
   }
 }
 
-export async function googlePlaceDetails(
-  placeId: string,
-): Promise<LocationSuggestion | null> {
+export async function googlePlaceDetails(placeId: string): Promise<LocationSuggestion | null> {
   const key = resolveGoogleMapsApiKey();
   if (!key || !placeId.trim()) return null;
 
   try {
-    const res = await fetch(
-      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
-      {
-        headers: googleRequestHeaders(
-          key,
-          "id,displayName,formattedAddress,location,types",
-        ),
-        cache: "no-store",
-      },
-    );
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      headers: googleRequestHeaders(key, "id,displayName,formattedAddress,location,types"),
+      cache: "no-store",
+    });
     if (!res.ok) return null;
     const data = (await res.json()) as {
       id?: string;
@@ -136,9 +111,7 @@ export async function googlePlaceDetails(
     };
     const lat = data.location?.latitude;
     const lng = data.location?.longitude;
-    if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-      return null;
-    }
+    if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     return {
       placeId: data.id || placeId,
       label: data.displayName?.text?.trim() || "สถานที่",
@@ -146,6 +119,51 @@ export async function googlePlaceDetails(
       latitude: lat,
       longitude: lng,
       placeType: data.types?.[0] || "google_place",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Reverse geocode a confirmed map pin through Google's server Geocoding API. */
+export async function googleReverseGeocode(
+  latitude: number,
+  longitude: number,
+): Promise<LocationSuggestion | null> {
+  const key = resolveGoogleMapsApiKey();
+  if (!key || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+  try {
+    const params = new URLSearchParams({
+      latlng: `${latitude},${longitude}`,
+      language: "th",
+      region: "th",
+      key,
+    });
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`, {
+      headers: { Referer: "https://www.kubhai.org/" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      status?: string;
+      results?: Array<{
+        place_id?: string;
+        formatted_address?: string;
+        types?: string[];
+      }>;
+    };
+    if (data.status !== "OK") return null;
+    const hit = data.results?.find((item) => item.formatted_address?.trim());
+    const address = hit?.formatted_address?.trim();
+    if (!hit || !address) return null;
+    return {
+      placeId: hit.place_id || `pin:${latitude},${longitude}`,
+      label: address.split(",")[0]?.trim() || address,
+      address,
+      latitude,
+      longitude,
+      placeType: hit.types?.[0] || "map_pin",
     };
   } catch {
     return null;
