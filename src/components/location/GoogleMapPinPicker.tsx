@@ -8,7 +8,8 @@ type MapsEvent = { addListener: (name: string, fn: () => void) => void };
 type MapLike = MapsEvent & { getCenter: () => { lat: () => number; lng: () => number } | null; panTo: (p: LatLng) => void };
 type MarkerLike = MapsEvent & { getPosition: () => { lat: () => number; lng: () => number } | null; setPosition: (p: LatLng) => void };
 type GeocoderResultLike = { place_id?: string; formatted_address?: string; types?: string[] };
-type GeocoderLike = { geocode: (request: Record<string, unknown>, callback: (results: GeocoderResultLike[] | null, status: string) => void) => void };
+type GeocoderResponseLike = { results?: GeocoderResultLike[] };
+type GeocoderLike = { geocode: (request: { location: LatLng }) => Promise<GeocoderResponseLike> };
 type GoogleMapsApi = {
   Map: new (el: HTMLElement, options: Record<string, unknown>) => MapLike;
   Marker: new (options: Record<string, unknown>) => MarkerLike;
@@ -47,26 +48,29 @@ function loadMaps(): Promise<GoogleMapsApi> {
   return loader;
 }
 
-function browserReverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
-  const maps = (window as GoogleWindow).google?.maps;
-  if (!maps?.Geocoder) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const geocoder = new maps.Geocoder();
-    geocoder.geocode({ location: p, language: "th", region: "TH" }, (results, status) => {
-      if (status !== "OK") { resolve(null); return; }
-      const hit = results?.find((item) => item.formatted_address?.trim());
-      const address = hit?.formatted_address?.trim();
-      if (!hit || !address) { resolve(null); return; }
-      resolve({
-        placeId: hit.place_id || null,
-        label: address.split(",")[0]?.trim() || address,
-        address,
-        latitude: p.lat,
-        longitude: p.lng,
-        placeType: hit.types?.[0] || "map_pin",
-      });
-    });
-  });
+function placeFromGeocoder(results: GeocoderResultLike[] | undefined, p: LatLng): ResolvedPlace | null {
+  const hit = results?.find((item) => item.formatted_address?.trim());
+  const address = hit?.formatted_address?.trim();
+  if (!hit || !address) return null;
+  return {
+    placeId: hit.place_id || null,
+    label: address.split(",")[0]?.trim() || address,
+    address,
+    latitude: p.lat,
+    longitude: p.lng,
+    placeType: hit.types?.[0] || "map_pin",
+  };
+}
+
+async function browserReverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
+  try {
+    const maps = (window as GoogleWindow).google?.maps;
+    if (!maps?.Geocoder) return null;
+    const response = await new maps.Geocoder().geocode({ location: p });
+    return placeFromGeocoder(response?.results, p);
+  } catch {
+    return null;
+  }
 }
 
 async function serverReverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
@@ -83,10 +87,30 @@ async function serverReverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
   }
 }
 
+async function enrichPlaceName(place: ResolvedPlace): Promise<ResolvedPlace> {
+  if (!place.placeId) return place;
+  try {
+    const params = new URLSearchParams({ placeId: place.placeId });
+    const res = await fetch(`/api/places/autocomplete?${params.toString()}`, { cache: "no-store" });
+    if (!res.ok) return place;
+    const data = (await res.json()) as { place?: ResolvedPlace | null };
+    const detail = data.place;
+    if (!detail) return place;
+    return {
+      ...place,
+      label: detail.label?.trim() || place.label,
+      address: detail.address?.trim() || place.address,
+      placeType: detail.placeType || place.placeType,
+    };
+  } catch {
+    return place;
+  }
+}
+
 async function reverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
-  const browserPlace = await browserReverseGeocode(p);
-  if (browserPlace) return browserPlace;
-  return serverReverseGeocode(p);
+  const base = await browserReverseGeocode(p) || await serverReverseGeocode(p);
+  if (!base) return null;
+  return enrichPlaceName(base);
 }
 
 export function GoogleMapPinPicker({ initial, onConfirm }: { initial?: LatLng | null; onConfirm: (loc: StructuredLocation) => void }) {
