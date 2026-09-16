@@ -21,8 +21,12 @@ export function LocationPickerSheet({ open, title, value, onClose, onSelect }: P
 
   useEffect(() => {
     if (!open) return;
+    const savedPoint = value?.latitude != null && value?.longitude != null ? { lat: value.latitude, lng: value.longitude } : null;
     setNote(value?.customerNote ?? "");
-    setMapInitial(value?.latitude != null && value?.longitude != null ? { lat: value.latitude, lng: value.longitude } : null);
+    setQuery(value?.label ?? "");
+    setMapInitial(savedPoint);
+    setMapMode(Boolean(savedPoint));
+    setGeoError(null);
     void getLocationProvider().popular().then(setPopular).catch(() => setPopular([]));
   }, [open, value]);
 
