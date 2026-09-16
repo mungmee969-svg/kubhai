@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Sans_Thai } from "next/font/google";
 import { kubhaiBrand } from "@/lib/brand/tokens";
 import "./globals.css";
+import "./booking-polish.css";
 
 const thai = Noto_Sans_Thai({
   variable: "--font-thai",
