@@ -18,8 +18,16 @@ export type RouteEstimateResult = {
   route: RouteEstimate | null;
 };
 
+function resolveRoutesApiKey(): string | null {
+  const key =
+    process.env.GOOGLE_MAPS_ROUTES_API_KEY?.trim() ||
+    process.env.GOOGLE_ROUTES_API_KEY?.trim() ||
+    "";
+  return key || null;
+}
+
 export function isGoogleRoutesConfigured(): boolean {
-  return Boolean(process.env.GOOGLE_ROUTES_API_KEY?.trim());
+  return Boolean(resolveRoutesApiKey());
 }
 
 export async function computeGoogleRoute(input: {
@@ -27,7 +35,7 @@ export async function computeGoogleRoute(input: {
   destination: RoutePoint;
   intermediates?: RoutePoint[];
 }): Promise<RouteEstimateResult> {
-  const key = process.env.GOOGLE_ROUTES_API_KEY?.trim();
+  const key = resolveRoutesApiKey();
   if (!key) return { configured: false, route: null };
 
   const waypoint = (point: RoutePoint) => ({
