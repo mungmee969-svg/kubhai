@@ -171,7 +171,7 @@ export async function googleReverseGeocode(
     const address = hit?.formattedAddress?.trim();
     if (!hit || !address) return null;
     return {
-      placeId: hit.id || null,
+      placeId: hit.id || "",
       label: hit.displayName?.text?.trim() || address.split(",")[0]?.trim() || address,
       address,
       // Preserve the exact customer-confirmed pin, not the nearby POI centroid.
