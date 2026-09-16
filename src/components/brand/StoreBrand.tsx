@@ -6,14 +6,16 @@ import { BrandMark } from "@/components/brand/BrandMark";
 export function StoreBrandScope({
   brand,
   className = "",
+  translate,
   children,
 }: {
   brand: BusinessBranding;
   className?: string;
+  translate?: "yes" | "no";
   children: ReactNode;
 }) {
   return (
-    <div className={className} style={brandingCssVars(brand)}>
+    <div className={className} style={brandingCssVars(brand)} translate={translate}>
       {children}
     </div>
   );
