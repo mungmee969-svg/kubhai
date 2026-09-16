@@ -125,7 +125,11 @@ export async function googlePlaceDetails(placeId: string): Promise<LocationSugge
   }
 }
 
-/** Reverse geocode a confirmed map pin through Google's server Geocoding API. */
+/**
+ * Describe a confirmed map pin with Places API (New), which is already part of
+ * the KubHai Maps setup. The returned place is only a readable description;
+ * the customer's exact pin coordinates remain authoritative.
+ */
 export async function googleReverseGeocode(
   latitude: number,
   longitude: number,
@@ -134,33 +138,43 @@ export async function googleReverseGeocode(
   if (!key || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
 
   try {
-    const params = new URLSearchParams({
-      latlng: `${latitude},${longitude}`,
-      language: "th",
-      region: "th",
-      key,
-    });
-    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`, {
-      headers: { Referer: "https://www.kubhai.org/" },
+    const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...googleRequestHeaders(key, "places.id,places.displayName,places.formattedAddress,places.location,places.types"),
+      },
+      body: JSON.stringify({
+        languageCode: "th",
+        rankPreference: "DISTANCE",
+        maxResultCount: 1,
+        locationRestriction: {
+          circle: {
+            center: { latitude, longitude },
+            radius: 100,
+          },
+        },
+      }),
       cache: "no-store",
     });
     if (!res.ok) return null;
     const data = (await res.json()) as {
-      status?: string;
-      results?: Array<{
-        place_id?: string;
-        formatted_address?: string;
+      places?: Array<{
+        id?: string;
+        displayName?: { text?: string };
+        formattedAddress?: string;
+        location?: { latitude?: number; longitude?: number };
         types?: string[];
       }>;
     };
-    if (data.status !== "OK") return null;
-    const hit = data.results?.find((item) => item.formatted_address?.trim());
-    const address = hit?.formatted_address?.trim();
+    const hit = data.places?.[0];
+    const address = hit?.formattedAddress?.trim();
     if (!hit || !address) return null;
     return {
-      placeId: hit.place_id || `pin:${latitude},${longitude}`,
-      label: address.split(",")[0]?.trim() || address,
+      placeId: hit.id || null,
+      label: hit.displayName?.text?.trim() || address.split(",")[0]?.trim() || address,
       address,
+      // Preserve the exact customer-confirmed pin, not the nearby POI centroid.
       latitude,
       longitude,
       placeType: hit.types?.[0] || "map_pin",
