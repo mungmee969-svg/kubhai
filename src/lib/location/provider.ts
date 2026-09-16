@@ -73,17 +73,6 @@ export type LocationSearchProvider = {
   resolvePlace?(placeId: string): Promise<LocationSuggestion | null>;
 };
 
-function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number) {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(bLat - aLat);
-  const dLng = toRad(bLng - aLng);
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(s));
-}
-
 export const localLocationProvider: LocationSearchProvider = {
   async search(query: string) {
     const q = query.trim().toLowerCase();
@@ -99,26 +88,18 @@ export const localLocationProvider: LocationSearchProvider = {
     return CHIANG_MAI_PLACES.slice(0, 4);
   },
   async reverseGeocode(lat: number, lng: number) {
-    let nearest = CHIANG_MAI_PLACES[0];
-    let best = Number.POSITIVE_INFINITY;
-    for (const place of CHIANG_MAI_PLACES) {
-      const d = haversineKm(lat, lng, place.latitude, place.longitude);
-      if (d < best) {
-        best = d;
-        nearest = place;
-      }
-    }
-    // Authoritative coords = the pin. Label/address from nearest place for humans — never raw coords as address.
-    const near = best < 0.35;
+    // Never guess a human-readable address from the Chiang Mai demo catalog.
+    // Browser geolocation coordinates are authoritative; a real reverse-geocoder
+    // can enrich the address later without replacing the actual GPS point.
     return {
-      label: near ? nearest.label : "ตำแหน่งที่ปักหมุด",
-      address: near ? nearest.address : `ใกล้ ${nearest.label}`,
+      label: "ตำแหน่งปัจจุบัน",
+      address: "ตำแหน่งจากอุปกรณ์ของคุณ",
       latitude: lat,
       longitude: lng,
-      placeId: near ? nearest.placeId : null,
-      placeType: near ? nearest.placeType : "map_pin",
+      placeId: null,
+      placeType: "current_location",
       customerNote: null,
-      source: "MAP_PIN",
+      source: "CURRENT_LOCATION",
     };
   },
 };
@@ -142,7 +123,6 @@ export const hybridLocationProvider: LocationSearchProvider = {
         suggestions?: LocationSuggestion[];
       };
       if (!data.configured || !data.suggestions?.length) return local;
-      // Google suggestions may lack lat/lng until details — keep them first, local after
       const google = data.suggestions.filter((item) => item.placeId);
       const localOnly = local.filter((item) => !google.some((g) => g.label === item.label));
       return [...google, ...localOnly].slice(0, 12);
