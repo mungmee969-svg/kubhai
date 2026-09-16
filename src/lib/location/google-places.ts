@@ -1,14 +1,30 @@
 /**
- * Google Places helpers (server-side).
- * Uses the server-only GOOGLE_MAPS_API_KEY.
- * Never hardcode secrets — configure via environment.
+ * Google Places helpers (server boundary used by the app autocomplete endpoint).
+ *
+ * Production currently uses the referrer-restricted browser key configured as
+ * NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. Keep GOOGLE_MAPS_API_KEY as an optional
+ * server-key override for a future dedicated Places server credential.
  */
 
 import type { LocationSuggestion } from "@/lib/location/provider";
 
 export function resolveGoogleMapsApiKey(): string | null {
-  const key = process.env.GOOGLE_MAPS_API_KEY?.trim() || "";
+  const key =
+    process.env.GOOGLE_MAPS_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
+    "";
   return key || null;
+}
+
+function googleRequestHeaders(key: string, fieldMask: string) {
+  return {
+    "X-Goog-Api-Key": key,
+    "X-Goog-FieldMask": fieldMask,
+    // The production browser key is restricted to kubhai.org. Google validates
+    // website-restricted keys from the HTTP referrer. A future dedicated
+    // GOOGLE_MAPS_API_KEY can replace this without changing callers.
+    Referer: "https://www.kubhai.org/",
+  };
 }
 
 export function isGooglePlacesConfigured(): boolean {
@@ -26,10 +42,6 @@ type AutocompletePrediction = {
   };
 };
 
-/**
- * Places API (New) Autocomplete with optional caller-provided location bias.
- * Returns empty array when key missing or request fails (caller falls back to local).
- */
 export async function googlePlacesAutocomplete(
   query: string,
   options?: { latitude?: number | null; longitude?: number | null },
@@ -43,9 +55,10 @@ export async function googlePlacesAutocomplete(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask":
+        ...googleRequestHeaders(
+          key,
           "suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat",
+        ),
       },
       body: JSON.stringify({
         input: q,
@@ -106,10 +119,10 @@ export async function googlePlaceDetails(
     const res = await fetch(
       `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
       {
-        headers: {
-          "X-Goog-Api-Key": key,
-          "X-Goog-FieldMask": "id,displayName,formattedAddress,location,types",
-        },
+        headers: googleRequestHeaders(
+          key,
+          "id,displayName,formattedAddress,location,types",
+        ),
         cache: "no-store",
       },
     );
