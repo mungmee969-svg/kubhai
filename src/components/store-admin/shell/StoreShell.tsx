@@ -61,11 +61,7 @@ export function StoreShell({
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-3">
           {STORE_NAV.map((item) => {
             const active = activePath(pathname, item.href, "exact" in item && item.exact);
-            return (
-              <Link key={item.href} href={item.href} className={`block rounded-xl px-3 py-2.5 text-sm ${active ? "bg-navy-800 text-white" : "text-navy-800 hover:bg-paper"}`}>
-                {item.label}
-              </Link>
-            );
+            return <Link key={item.href} href={item.href} className={`block rounded-xl px-3 py-2.5 text-sm ${active ? "bg-navy-800 text-white" : "text-navy-800 hover:bg-paper"}`}>{item.label}</Link>;
           })}
         </nav>
         <div className="border-t border-line px-4 py-4 text-xs text-muted">
@@ -78,31 +74,27 @@ export function StoreShell({
       </aside>
 
       {drawer ? (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="เมนูร้าน">
-          <button type="button" aria-label="ปิดเมนู" className="absolute inset-0 bg-navy-950/40" onClick={() => setDrawer(false)} />
-          <div className="absolute inset-y-0 left-0 flex w-[min(86vw,320px)] flex-col bg-white shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-4">
+        <div className="fixed inset-0 z-[100] lg:hidden" role="dialog" aria-modal="true" aria-label="เมนูร้าน">
+          <button type="button" aria-label="ปิดเมนู" className="absolute inset-0 z-0 bg-navy-950/40" onClick={() => setDrawer(false)} />
+          <aside className="absolute inset-y-0 left-0 z-10 flex w-[min(86vw,320px)] flex-col bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-4">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-navy-800">{businessName}</p>
                 <p className="text-[11px] text-muted">{role === "BUSINESS_STAFF" ? "พนักงานร้าน" : "เจ้าของร้าน"}</p>
               </div>
               <button type="button" onClick={() => setDrawer(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line text-lg text-navy-800" aria-label="ปิดเมนู">×</button>
             </div>
-            <nav className="flex-1 overflow-y-auto p-3">
+            <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 pb-6">
               {STORE_NAV.map((item) => {
                 const active = activePath(pathname, item.href, "exact" in item && item.exact);
-                return (
-                  <Link key={item.href} href={item.href} onClick={() => setDrawer(false)} className={`mb-1 block rounded-xl px-3 py-3 text-sm ${active ? "bg-navy-800 font-semibold text-white" : "text-navy-800 hover:bg-paper"}`}>
-                    {item.label}
-                  </Link>
-                );
+                return <Link key={item.href} href={item.href} onClick={() => setDrawer(false)} className={`mb-1 block rounded-xl px-3 py-3 text-sm ${active ? "bg-navy-800 font-semibold text-white" : "text-navy-800 hover:bg-paper"}`}>{item.label}</Link>;
               })}
             </nav>
-            <div className="border-t border-line p-4 text-xs text-muted">
+            <div className="shrink-0 border-t border-line bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-xs text-muted">
               <p className="truncate text-navy-800">{email}</p>
               <form action={logoutAction} className="mt-3"><button className="min-h-10 text-navy-800">ออกจากระบบ</button></form>
             </div>
-          </div>
+          </aside>
         </div>
       ) : null}
 
