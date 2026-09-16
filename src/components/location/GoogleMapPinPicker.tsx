@@ -76,7 +76,7 @@ export function GoogleMapPinPicker({ initial, onConfirm }: { initial?: LatLng | 
     if (requestId !== requestRef.current) return;
     setResolved(place);
     setGeocoding(false);
-    if (!place) setError("ยังอ่านชื่อ/ที่อยู่ของหมุดนี้ไม่ได้ กรุณาลองเลือกจุดใหม่หรือค้นหาสถานที่");
+    if (!place) setError("ยังอ่านชื่อ/ที่อยู่ของหมุดนี้ไม่ได้ แต่สามารถยืนยันพิกัดนี้เพื่อดำเนินการต่อได้");
     else setError((current) => current?.startsWith("GPS อาจคลาดเคลื่อน") ? current : null);
   }
 
@@ -116,25 +116,16 @@ export function GoogleMapPinPicker({ initial, onConfirm }: { initial?: LatLng | 
     }, () => setError("อ่านตำแหน่งปัจจุบันไม่ได้ กรุณาอนุญาต Location หรือเลื่อนหมุดเอง"), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   }
 
-  async function confirm() {
-    if (geocoding) return;
-    setGeocoding(true);
-    const place = await reverseGeocode(point);
-    setGeocoding(false);
-    if (!place?.address?.trim()) {
-      setResolved(null);
-      setError("ยังระบุที่อยู่ของจุดนี้ไม่ได้ กรุณาเลือกจุดใหม่หรือค้นหาสถานที่ก่อนยืนยัน");
-      return;
-    }
-    setResolved(place);
-    setError(null);
+  function confirm() {
+    const place = resolved;
+    const address = place?.address?.trim() || null;
     onConfirm({
-      label: place.label?.trim() || place.address.trim(),
-      address: place.address.trim(),
+      label: place?.label?.trim() || address || "ตำแหน่งที่ปักหมุด",
+      address,
       latitude: point.lat,
       longitude: point.lng,
-      placeId: place.placeId || null,
-      placeType: place.placeType || "map_pin",
+      placeId: place?.placeId || null,
+      placeType: place?.placeType || "map_pin",
       customerNote: null,
       source: "MAP_PIN",
     });
@@ -148,10 +139,10 @@ export function GoogleMapPinPicker({ initial, onConfirm }: { initial?: LatLng | 
       <button type="button" onClick={currentLocation} className="absolute bottom-4 right-4 min-h-11 rounded-full bg-white px-4 text-xs font-semibold text-[color:var(--store-primary,#0F3D3E)] shadow-lg">◎ ตำแหน่งปัจจุบัน</button>
     </div>
     <div className="rounded-2xl bg-white p-3 shadow-sm">
-      <p className="text-xs font-semibold">{resolved?.label?.trim() || "ตำแหน่งที่เลือก"}</p>
-      <p className="mt-1 text-xs leading-5 text-muted">{geocoding ? "กำลังค้นหาชื่อและที่อยู่…" : resolved?.address?.trim() || "ยังไม่มีรายละเอียดที่อยู่"}</p>
+      <p className="text-xs font-semibold">{resolved?.label?.trim() || "ตำแหน่งที่ปักหมุด"}</p>
+      <p className="mt-1 text-xs leading-5 text-muted">{geocoding ? "กำลังค้นหาชื่อและที่อยู่…" : resolved?.address?.trim() || "ระบบจะใช้พิกัดหมุดนี้เป็นตำแหน่งหลัก"}</p>
     </div>
     {error ? <p className="text-xs text-danger">{error}</p> : null}
-    <button type="button" disabled={busy || geocoding || !resolved?.address?.trim()} onClick={() => void confirm()} className="booking-cta-primary">{geocoding ? "กำลังตรวจสอบที่อยู่…" : "ยืนยันตำแหน่งนี้"}</button>
+    <button type="button" disabled={busy} onClick={confirm} className="booking-cta-primary">ยืนยันตำแหน่งนี้</button>
   </div>;
 }
