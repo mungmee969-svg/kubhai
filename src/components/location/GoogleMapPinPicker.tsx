@@ -7,9 +7,12 @@ type LatLng = { lat: number; lng: number };
 type MapsEvent = { addListener: (name: string, fn: () => void) => void };
 type MapLike = MapsEvent & { getCenter: () => { lat: () => number; lng: () => number } | null; panTo: (p: LatLng) => void };
 type MarkerLike = MapsEvent & { getPosition: () => { lat: () => number; lng: () => number } | null; setPosition: (p: LatLng) => void };
+type GeocoderResultLike = { place_id?: string; formatted_address?: string; types?: string[] };
+type GeocoderLike = { geocode: (request: Record<string, unknown>, callback: (results: GeocoderResultLike[] | null, status: string) => void) => void };
 type GoogleMapsApi = {
   Map: new (el: HTMLElement, options: Record<string, unknown>) => MapLike;
   Marker: new (options: Record<string, unknown>) => MarkerLike;
+  Geocoder: new () => GeocoderLike;
 };
 type GoogleWindow = Window & { google?: { maps?: GoogleMapsApi } };
 type ResolvedPlace = {
@@ -44,7 +47,29 @@ function loadMaps(): Promise<GoogleMapsApi> {
   return loader;
 }
 
-async function reverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
+function browserReverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
+  const maps = (window as GoogleWindow).google?.maps;
+  if (!maps?.Geocoder) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const geocoder = new maps.Geocoder();
+    geocoder.geocode({ location: p, language: "th", region: "TH" }, (results, status) => {
+      if (status !== "OK") { resolve(null); return; }
+      const hit = results?.find((item) => item.formatted_address?.trim());
+      const address = hit?.formatted_address?.trim();
+      if (!hit || !address) { resolve(null); return; }
+      resolve({
+        placeId: hit.place_id || null,
+        label: address.split(",")[0]?.trim() || address,
+        address,
+        latitude: p.lat,
+        longitude: p.lng,
+        placeType: hit.types?.[0] || "map_pin",
+      });
+    });
+  });
+}
+
+async function serverReverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
   try {
     const params = new URLSearchParams({ lat: String(p.lat), lng: String(p.lng) });
     const res = await fetch(`/api/places/autocomplete?${params.toString()}`, { cache: "no-store" });
@@ -56,6 +81,12 @@ async function reverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
   } catch {
     return null;
   }
+}
+
+async function reverseGeocode(p: LatLng): Promise<ResolvedPlace | null> {
+  const browserPlace = await browserReverseGeocode(p);
+  if (browserPlace) return browserPlace;
+  return serverReverseGeocode(p);
 }
 
 export function GoogleMapPinPicker({ initial, onConfirm }: { initial?: LatLng | null; onConfirm: (loc: StructuredLocation) => void }) {
