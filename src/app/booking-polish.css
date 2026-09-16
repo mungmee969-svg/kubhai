@@ -1,0 +1,45 @@
+/* Booking UX fixes kept separate from globals.css so the stable global stylesheet stays untouched. */
+
+/* Desktop browsers need the native date control itself to remain interactive. */
+@media (min-width: 768px) {
+  .booking-datetime-card input[type="date"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.01;
+    cursor: pointer;
+    z-index: 2;
+  }
+
+  .booking-datetime-card input[type="date"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+}
+
+/* A full-height rail was visually heavy. Keep only a short local cue around the stop action. */
+.booking-route-rail::before {
+  top: 4.35rem !important;
+  bottom: auto !important;
+  height: 2.4rem !important;
+  opacity: 0.55;
+}
+
+/* Sticky secondary action must stay readable in both customer themes. */
+.booking-sticky-cta a.bg-white,
+.booking-sticky-cta button.bg-white {
+  background: var(--cx-surfaceElevated, #fff) !important;
+  color: var(--cx-textPrimary, #0f1724) !important;
+  border: 1px solid var(--cx-border, rgba(15, 23, 36, 0.12));
+}
+
+.customer-dark .booking-sticky-cta a.bg-white,
+.customer-dark .booking-sticky-cta button.bg-white {
+  background: var(--cx-surfaceElevated, #18202b) !important;
+  color: var(--cx-textPrimary, #f8fafc) !important;
+  border-color: var(--cx-border, rgba(255, 255, 255, 0.16));
+}
