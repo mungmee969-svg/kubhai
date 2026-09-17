@@ -2,6 +2,10 @@
 
 import { ConflictError, DomainError, getStore } from "@/lib/data";
 import {
+  createDurableBookingRequest,
+  isDurableBookingConfigured,
+} from "@/lib/data/supabase-booking";
+import {
   logBookingValidationFailure,
   parseBookingSubmitPayload,
   type BookingFieldIssue,
@@ -39,10 +43,21 @@ export async function submitBookingRequest(
   }
 
   try {
-    const store = getStore();
-    const result = await store.createBookingRequest(
-      parsed.payload as BookingRequestInput,
-    );
+    const input = parsed.payload as BookingRequestInput;
+
+    // Production uses durable Supabase persistence. Local development keeps the
+    // existing JSON store so the fixture-heavy developer workflow is unchanged.
+    if (isDurableBookingConfigured()) {
+      const result = await createDurableBookingRequest(input);
+      return {
+        ok: true,
+        token: result.token,
+        bookingCode: result.bookingCode,
+        reused: result.reused,
+      };
+    }
+
+    const result = await getStore().createBookingRequest(input);
     return {
       ok: true,
       token: result.booking.securePublicToken,
@@ -55,6 +70,7 @@ export async function submitBookingRequest(
     console.error("[booking] createBookingRequest failed", {
       businessSlug: parsed.payload.businessSlug,
       serviceType: parsed.payload.serviceType,
+      persistence: isDurableBookingConfigured() ? "supabase" : "local",
       error: bookingErrorForLog(error),
     });
 
