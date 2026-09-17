@@ -18,6 +18,11 @@ import { CustomerPrefsControls } from "@/components/storefront/CustomerPrefsCont
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import { getStore } from "@/lib/data";
+import {
+  getDurableBookingByToken,
+  isDurableBookingConfigured,
+} from "@/lib/data/supabase-booking";
+import type { BookingRecord } from "@/lib/data/repository";
 import { allowsCustomerLocales } from "@/lib/domain/booking-entitlements";
 import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
 import { SERVICE_TYPE_LABELS } from "@/lib/domain/enums";
@@ -35,6 +40,54 @@ import { translate } from "@/lib/i18n/translate";
 
 export const dynamic = "force-dynamic";
 
+async function loadBookingByToken(token: string): Promise<BookingRecord | null> {
+  if (!token || token.length < 20) return null;
+
+  if (isDurableBookingConfigured()) {
+    try {
+      const durable = await getDurableBookingByToken(token);
+      if (durable) {
+        const publicStore = await getStore().getPublicStore(durable.businessSlug);
+        if (!publicStore || publicStore.business.id !== durable.booking.businessId) {
+          console.error("[booking] durable token business unavailable", {
+            businessSlug: durable.businessSlug,
+            bookingId: durable.booking.id,
+          });
+          return null;
+        }
+        return {
+          booking: durable.booking,
+          itinerary: durable.itinerary,
+          vehicle: null,
+          preferredVehicle:
+            publicStore.vehicles.find(
+              (item) => item.id === durable.booking.preferredVehicleId,
+            ) ?? null,
+          driver: null,
+          business: publicStore.business,
+          customer: null,
+          notes: [],
+          movements: [],
+          proofs: [],
+          receivingAccount: null,
+          quotations: [],
+          auditLogs: [],
+          tripCheckIns: [],
+        };
+      }
+    } catch (error) {
+      console.error("[booking] durable token read failed", {
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : { name: "UnknownError", message: String(error) },
+      });
+    }
+  }
+
+  return getStore().getBookingByToken(token);
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -42,9 +95,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { token } = await params;
   if (!token || token.length < 20) return { title: "การจอง" };
-  const raw = await getStore().getBookingByToken(token);
+  const raw = await loadBookingByToken(token);
   if (!raw) return { title: "การจอง" };
-  // Public metadata only — no customer/route/payment details
   return brandingMetadata(raw.business, "การจอง");
 }
 
@@ -57,10 +109,9 @@ export default async function BookingPage({
 }) {
   const { token } = await params;
   const query = await searchParams;
-  const raw = await getStore().getBookingByToken(token);
+  const raw = await loadBookingByToken(token);
   if (!raw) notFound();
 
-  // Returning from login / phone verification with ?claim=1 — retry the link once.
   const session = await getCustomerSession();
   if (
     query.claim === "1" &&
