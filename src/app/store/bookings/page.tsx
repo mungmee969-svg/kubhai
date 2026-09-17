@@ -2,6 +2,7 @@ import { EmptyState } from "@/components/store-admin/ui/EmptyState";
 import { BookingFilterBar } from "@/components/store-admin/booking/BookingFilterBar";
 import { BookingInboxCard } from "@/components/store-admin/booking/BookingInboxCard";
 import { requireStoreContext } from "@/lib/auth/tenant";
+import { listDurableStoreBookings } from "@/lib/data/supabase-store-booking";
 import {
   OPS_INBOX_FILTERS,
   resolveBookingNextAction,
@@ -31,6 +32,7 @@ export default async function BookingsWorkspacePage({
   if (!ctx.businessId) return <p>บัญชีนี้ยังไม่มีร้าน</p>;
   const query = await searchParams;
   const board = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
+  const durableBookings = await listDurableStoreBookings(ctx.businessId);
   const movements = await ctx.store.listMoneyMovements(ctx.actor, ctx.businessId);
   const proofs = await ctx.store.listPaymentProofs(ctx.actor, ctx.businessId);
   const quotations = await ctx.store.listQuotations(ctx.actor, ctx.businessId);
@@ -40,7 +42,14 @@ export default async function BookingsWorkspacePage({
   const today = todayBangkok();
   const filter = query.filter ?? "NEW";
 
-  const visibleBookings = operationalBookings(board.bookings);
+  // Durable production bookings are already tenant-locked by the server-side
+  // store credential. Keep the business-id check here as defense in depth and
+  // de-duplicate against local fixtures during the rollout.
+  const mergedBookings = new Map(board.bookings.map((booking) => [booking.id, booking]));
+  for (const booking of durableBookings) {
+    if (booking.businessId === ctx.businessId) mergedBookings.set(booking.id, booking);
+  }
+  const visibleBookings = operationalBookings([...mergedBookings.values()]);
   const settled = visibleBookings.map((booking) => {
     const bookingQuotes = quotations.filter((item) => item.bookingId === booking.id);
     const settlement = settleBooking(
@@ -166,7 +175,6 @@ export default async function BookingsWorkspacePage({
         ))}
       </div>
 
-      {/* Desktop: keep a denser companion list without spreadsheet columns */}
       {rows.length > 0 ? (
         <p className="mt-6 hidden text-center text-xs text-muted lg:block">
           แสดงเป็นบัตรงาน · {OPS_INBOX_FILTERS.find((item) => item.key === filter)?.label ?? filter}
