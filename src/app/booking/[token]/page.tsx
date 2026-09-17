@@ -22,6 +22,7 @@ import {
   getDurableBookingByToken,
   isDurableBookingConfigured,
 } from "@/lib/data/supabase-booking";
+import { seedBusinesses, seedVehicles } from "@/lib/data/seed";
 import type { BookingRecord } from "@/lib/data/repository";
 import { allowsCustomerLocales } from "@/lib/domain/booking-entitlements";
 import { resolveCustomerStorefrontBranding } from "@/lib/domain/branding";
@@ -47,24 +48,47 @@ async function loadBookingByToken(token: string): Promise<BookingRecord | null> 
     try {
       const durable = await getDurableBookingByToken(token);
       if (durable) {
-        const publicStore = await getStore().getPublicStore(durable.businessSlug);
-        if (!publicStore || publicStore.business.id !== durable.booking.businessId) {
-          console.error("[booking] durable token business unavailable", {
+        // Booking persistence is already durable in Supabase. Storefront metadata is
+        // still in the staged local repository, so use it when available and fall
+        // back to the deterministic seed metadata. A valid durable token must not
+        // become a false 404 merely because local storefront state is unavailable.
+        const publicStore = await getStore()
+          .getPublicStore(durable.businessSlug)
+          .catch(() => null);
+        const business =
+          publicStore?.business ??
+          seedBusinesses.find(
+            (item) =>
+              item.slug === durable.businessSlug ||
+              item.id === durable.booking.businessId,
+          ) ??
+          null;
+
+        if (!business) {
+          console.error("[booking] durable token business metadata unavailable", {
             businessSlug: durable.businessSlug,
             bookingId: durable.booking.id,
           });
           return null;
         }
+
+        const preferredVehicle = durable.booking.preferredVehicleId
+          ? (publicStore?.vehicles.find(
+              (item) => item.id === durable.booking.preferredVehicleId,
+            ) ??
+            seedVehicles.find(
+              (item) => item.id === durable.booking.preferredVehicleId,
+            ) ??
+            null)
+          : null;
+
         return {
           booking: durable.booking,
           itinerary: durable.itinerary,
           vehicle: null,
-          preferredVehicle:
-            publicStore.vehicles.find(
-              (item) => item.id === durable.booking.preferredVehicleId,
-            ) ?? null,
+          preferredVehicle,
           driver: null,
-          business: publicStore.business,
+          business,
           customer: null,
           notes: [],
           movements: [],
@@ -150,7 +174,7 @@ export default async function BookingPage({
   const showPayment = accepted
     ? accepted.depositRequiredAmount > 0 || settlement.customerPaidService > 0
     : ["WAITING_DEPOSIT", "CONFIRMED", "IN_PROGRESS", "COMPLETED"].includes(booking.status);
-  const publicStore = await getStore().getPublicStore(business.slug);
+  const publicStore = await getStore().getPublicStore(business.slug).catch(() => null);
   const tipSettings = publicStore?.settings?.tips ?? [];
 
   return (
