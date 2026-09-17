@@ -1,4 +1,8 @@
-import { getDurableBookingByToken, isDurableBookingConfigured } from "@/lib/data/supabase-booking";
+import {
+  getDurableBookingByToken,
+  isDurableBookingConfigured,
+  type DurableBookingRecord,
+} from "@/lib/data/supabase-booking";
 import type { Booking } from "@/lib/domain/types";
 
 // Transitional server-only credential for the first production tenant. The DB
@@ -25,7 +29,7 @@ function config() {
   return { url, key };
 }
 
-export async function listDurableStoreBookings(businessId: string): Promise<Booking[]> {
+async function listTenantRows(businessId: string): Promise<StoreBookingEnvelope[]> {
   const cfg = config();
   const adminToken = STORE_READ_TOKENS[businessId];
   if (!cfg || !adminToken || !isDurableBookingConfigured()) return [];
@@ -47,18 +51,35 @@ export async function listDurableStoreBookings(businessId: string): Promise<Book
 
   const rows = (await response.json()) as StoreBookingEnvelope[];
   if (!Array.isArray(rows)) throw new Error("Durable store booking inbox returned invalid data");
+  return rows.filter((row) => row.businessId === businessId);
+}
 
+export async function listDurableStoreBookings(businessId: string): Promise<Booking[]> {
+  const rows = await listTenantRows(businessId);
   const safeTokens = rows.flatMap((row) =>
-    typeof row.businessId === "string" &&
-    row.businessId === businessId &&
-    typeof row.token === "string" &&
-    row.token.length >= 48
-      ? [row.token]
-      : [],
+    typeof row.token === "string" && row.token.length >= 48 ? [row.token] : [],
   );
-
   const records = await Promise.all(safeTokens.map((token) => getDurableBookingByToken(token)));
   return records.flatMap((record) =>
     record && record.booking.businessId === businessId ? [record.booking] : [],
   );
+}
+
+export async function getDurableStoreBookingById(
+  businessId: string,
+  bookingId: string,
+): Promise<DurableBookingRecord | null> {
+  const rows = await listTenantRows(businessId);
+  const row = rows.find(
+    (item) =>
+      item.id === bookingId &&
+      item.businessId === businessId &&
+      typeof item.token === "string" &&
+      item.token.length >= 48,
+  );
+  if (!row || typeof row.token !== "string") return null;
+  const record = await getDurableBookingByToken(row.token);
+  return record && record.booking.businessId === businessId && record.booking.id === bookingId
+    ? record
+    : null;
 }
