@@ -1,8 +1,8 @@
 alter table public.business_registry add column if not exists admin_read_token_hash text;
 
--- First production tenant bootstrap. Only the hash is stored in the database.
+-- First production tenant bootstrap. Database migrations retain only the hash.
 update public.business_registry
-set admin_read_token_hash = encode(extensions.digest('0eb92dc1145a3f4b1dfa8bc1cd6d09e3be00bebd5a4998e70b7e02f6e73732f0'::text, 'sha256'::text), 'hex')
+set admin_read_token_hash = '1799fe0cc61c12457852102ceb978dde005901335d60e270db88b100020aad06'
 where slug = 'pondcarrent';
 
 create or replace function public.list_store_booking_requests(p_business_id uuid, p_admin_token text)
