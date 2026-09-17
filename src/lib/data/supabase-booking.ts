@@ -125,13 +125,24 @@ export async function getDurableBookingByToken(
     throw new Error("Supabase booking read RPC returned an invalid response");
   }
 
+  // Keep these narrowed strings separate. TypeScript does not preserve property
+  // narrowing of mutable object properties inside map callbacks.
+  const bookingId = raw.id;
+  const businessId = raw.businessId;
+  const businessSlug = raw.businessSlug;
+  const bookingCode = raw.bookingCode;
+  const securePublicToken = raw.token;
+  const clientRequestId = raw.clientRequestId;
+  const createdAt = raw.createdAt;
+  const updatedAt = raw.updatedAt;
   const input = raw.payload as BookingRequestInput;
+
   const booking: Booking = {
-    id: raw.id,
-    businessId: raw.businessId,
-    bookingCode: raw.bookingCode,
-    securePublicToken: raw.token,
-    clientRequestId: raw.clientRequestId,
+    id: bookingId,
+    businessId,
+    bookingCode,
+    securePublicToken,
+    clientRequestId,
     tripPackageId: input.tripPackageId ?? null,
     customerId: null,
     customerAccountId: null,
@@ -185,15 +196,15 @@ export async function getDurableBookingByToken(
     earlyCompletionNote: null,
     completedByUserId: null,
     completedAt: null,
-    createdAt: raw.createdAt,
-    updatedAt: raw.updatedAt,
+    createdAt,
+    updatedAt,
   };
 
   const itinerary: BookingItineraryItem[] = (input.itineraryDays ?? []).map(
     (item, index) => ({
-      id: `${raw.id}-itinerary-${index + 1}`,
-      bookingId: raw.id,
-      businessId: raw.businessId,
+      id: `${bookingId}-itinerary-${index + 1}`,
+      bookingId,
+      businessId,
       placeId: item.placeId,
       title: item.title,
       location: item.location,
@@ -209,5 +220,5 @@ export async function getDurableBookingByToken(
     }),
   );
 
-  return { booking, itinerary, businessSlug: raw.businessSlug };
+  return { booking, itinerary, businessSlug };
 }
