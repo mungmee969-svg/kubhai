@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { ConflictError, DomainError, getStore } from "@/lib/data";
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import {
@@ -43,22 +44,16 @@ export async function submitBookingRequest(
     return { ok: false, error: parsed.error, issues: parsed.issues };
   }
 
-  // A booking is a customer-owned transaction. Never create a production
-  // booking for an anonymous visitor or an unverified phone number.
   const session = await getCustomerSession();
   if (!session) {
-    return {
-      ok: false,
-      code: "AUTH_REQUIRED",
-      error: "กรุณาเข้าสู่ระบบหรือสมัครสมาชิกก่อนส่งคำขอจอง",
-    };
+    const slug = parsed.payload.businessSlug;
+    const next = `/s/${slug}`;
+    redirect(
+      `/account/login?store=${encodeURIComponent(slug)}&context=booking&next=${encodeURIComponent(next)}`,
+    );
   }
   if (!session.phoneVerified) {
-    return {
-      ok: false,
-      code: "PHONE_VERIFICATION_REQUIRED",
-      error: "กรุณายืนยันเบอร์โทรด้วย OTP ก่อนส่งคำขอจอง",
-    };
+    redirect("/account/security");
   }
 
   try {
@@ -87,8 +82,6 @@ export async function submitBookingRequest(
       businessSlug: selectedStore.business.slug,
     };
 
-    // Production uses durable Supabase persistence. Local development keeps the
-    // existing JSON store so the fixture-heavy developer workflow is unchanged.
     if (isDurableBookingConfigured()) {
       const result = await createDurableBookingRequest(tenantLockedInput);
       return {
@@ -107,8 +100,6 @@ export async function submitBookingRequest(
       reused: result.reused,
     };
   } catch (error) {
-    // Keep customer PII and the full booking payload out of production logs.
-    // This diagnostic records only safe routing/context plus the exception.
     console.error("[booking] createBookingRequest failed", {
       businessSlug: parsed.payload.businessSlug,
       serviceType: parsed.payload.serviceType,
