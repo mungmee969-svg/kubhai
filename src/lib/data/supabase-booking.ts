@@ -116,13 +116,25 @@ export async function getDurableBookingByToken(
     typeof raw.businessSlug !== "string" ||
     typeof raw.bookingCode !== "string" ||
     typeof raw.token !== "string" ||
-    typeof raw.clientRequestId !== "string" ||
     typeof raw.createdAt !== "string" ||
     typeof raw.updatedAt !== "string" ||
     !raw.payload ||
     typeof raw.payload !== "object"
   ) {
     throw new Error("Supabase booking read RPC returned an invalid response");
+  }
+
+  const input = raw.payload as BookingRequestInput;
+  const payloadClientRequestId = input.clientRequestId;
+  const clientRequestId =
+    typeof raw.clientRequestId === "string"
+      ? raw.clientRequestId
+      : typeof payloadClientRequestId === "string"
+        ? payloadClientRequestId
+        : null;
+
+  if (!clientRequestId) {
+    throw new Error("Supabase booking read RPC is missing clientRequestId");
   }
 
   // Keep these narrowed strings separate. TypeScript does not preserve property
@@ -132,10 +144,8 @@ export async function getDurableBookingByToken(
   const businessSlug = raw.businessSlug;
   const bookingCode = raw.bookingCode;
   const securePublicToken = raw.token;
-  const clientRequestId = raw.clientRequestId;
   const createdAt = raw.createdAt;
   const updatedAt = raw.updatedAt;
-  const input = raw.payload as BookingRequestInput;
 
   const booking: Booking = {
     id: bookingId,
