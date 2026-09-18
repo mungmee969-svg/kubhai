@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { BookingItineraryDays } from "@/components/booking/ItineraryDaysView";
-import { LocationMapPreview } from "@/components/maps/LocationMapPreview";
 import { Feedback } from "@/components/store-admin/ui/Feedback";
 import { AssignDrawer } from "@/components/store-admin/booking/AssignDrawer";
 import { markBookingOpened } from "@/components/store-admin/booking/BookingInboxCard";
@@ -417,12 +416,22 @@ export function BookingWorkspace({
                   endDate={booking.endDate}
                   letStorePlanTrip={booking.letStorePlanTrip}
                 />
-                <LocationMapPreview
-                  latitude={booking.pickupLat}
-                  longitude={booking.pickupLng}
-                  label={booking.pickupLocation || "จุดรับลูกค้า"}
-                  className="mt-4"
-                />
+                <div className="mt-4 rounded-xl bg-paper p-4 text-sm">
+                  <p className="font-medium text-navy-800">เส้นทางที่ลูกค้าส่งมา</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-muted">จุดรับ</p>
+                      <p className="mt-1 font-medium text-navy-800">{booking.pickupLocation || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted">จุดส่ง</p>
+                      <p className="mt-1 font-medium text-navy-800">{booking.dropoffLocation || "—"}</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-muted">
+                    ใช้ข้อมูลต้นฉบับจากคำขอจองเป็นหลัก ร้านไม่ต้องสร้างเส้นทางใหม่
+                  </p>
+                </div>
                 <div className="mt-4 space-y-2 border-t border-line pt-4">
                   <p className="text-sm font-medium text-navy-800">ปรับแผน / เพิ่มคำแนะนำ</p>
                   <select className="admin-input" value={placeId} onChange={(e) => setPlaceId(e.target.value)}>
