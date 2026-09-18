@@ -59,26 +59,24 @@ export async function submitBookingRequest(
   try {
     const input = parsed.payload as BookingRequestInput;
 
-    // Resolve the exact storefront selected by the customer and bind the
-    // booking to that tenant. Never fan a booking out to every store and never
-    // trust a client-supplied business id by itself.
+    // Resolve the exact storefront selected by the customer. BookingRequestInput
+    // intentionally carries only the store slug; the server/database resolves the
+    // authoritative business id from that slug. This prevents a browser from
+    // supplying another tenant id or broadcasting one request to multiple stores.
     const selectedStore = await getStore().getPublicStore(input.businessSlug);
-    if (!selectedStore?.business || selectedStore.business.id !== input.businessId) {
-      console.error("[booking] rejected store routing mismatch", {
+    if (!selectedStore?.business || selectedStore.business.slug !== input.businessSlug) {
+      console.error("[booking] rejected unknown store routing", {
         businessSlug: input.businessSlug,
-        suppliedBusinessId: input.businessId,
-        resolvedBusinessId: selectedStore?.business?.id ?? null,
       });
       return {
         ok: false,
         code: "STORE_MISMATCH",
-        error: "ร้านที่เลือกไม่ตรงกับคำขอจอง กรุณากลับไปเลือกร้านอีกครั้ง",
+        error: "ไม่พบร้านที่เลือก กรุณากลับไปเลือกร้านอีกครั้ง",
       };
     }
 
     const tenantLockedInput: BookingRequestInput = {
       ...input,
-      businessId: selectedStore.business.id,
       businessSlug: selectedStore.business.slug,
     };
 
