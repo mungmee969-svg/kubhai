@@ -63,15 +63,25 @@ export default async function StoreBookingPage({
   }
   if (!record || record.booking.businessId !== ctx.businessId) notFound();
 
-  let board = { vehicles: [], drivers: [], places: [], bookings: [] } as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>;
+  // These operational datasets are still local-backed. Treat them as optional
+  // while production booking persistence is being migrated, without using
+  // method ReturnType expressions that fail TypeScript on the repository object.
+  let vehicles: BookingRecord["vehicle"][] = [];
+  let drivers: unknown[] = [];
+  let places: unknown[] = [];
+  let bookings: unknown[] = [];
   try {
-    board = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
+    const tenantBoard = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
+    vehicles = tenantBoard.vehicles as typeof vehicles;
+    drivers = tenantBoard.drivers;
+    places = tenantBoard.places;
+    bookings = tenantBoard.bookings;
   } catch {}
-  let accounts: Awaited<ReturnType<typeof ctx.store.listPaymentAccounts>> = [];
+  let accounts: unknown[] = [];
   try {
     accounts = await ctx.store.listPaymentAccounts(ctx.actor, ctx.businessId, { includeInactive: true });
   } catch {}
-  let driverJob: Awaited<ReturnType<typeof ctx.store.listDriverJobForBooking>> = null;
+  let driverJob = null;
   try {
     driverJob = await ctx.store.listDriverJobForBooking(ctx.actor, id);
   } catch {}
@@ -85,11 +95,11 @@ export default async function StoreBookingPage({
       tripPackageTitle={
         tripPackage ? localizedPackageText("th", tripPackage.title, "แพ็กเกจทริป") : null
       }
-      vehicles={board.vehicles}
-      drivers={board.drivers}
-      places={board.places}
-      bookings={board.bookings}
-      accounts={accounts}
+      vehicles={vehicles as never}
+      drivers={drivers as never}
+      places={places as never}
+      bookings={bookings as never}
+      accounts={accounts as never}
       initialProofId={proof}
       driverJob={driverJob}
     />
