@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createHash } from "node:crypto";
+import { isPilotDevOtpEnabled, PILOT_DEV_OTP } from "@/lib/auth/otp";
 import {
   clearCustomerSession,
   setCustomerSession,
@@ -30,6 +32,23 @@ async function sessionFromAccount(account: {
 
 export async function customerSignupStartAction(phone: string): Promise<CustomerAuthResult> {
   try {
+    // Production pilot mode must not touch the read-only local JSON repository.
+    // This path exists only while both explicit DEV OTP flags are enabled.
+    if (isPilotDevOtpEnabled()) {
+      const normalized = normalizePhone(phone);
+      if (!normalized) return { ok: false, error: "กรุณากรอกเบอร์โทรให้ถูกต้อง" };
+      const challengeId = `pilot.${Buffer.from(normalized, "utf8").toString("base64url")}`;
+      const now = Date.now();
+      return {
+        ok: true,
+        data: {
+          challengeId,
+          expiresAt: new Date(now + 5 * 60 * 1000).toISOString(),
+          resendAvailableAt: new Date(now + 60 * 1000).toISOString(),
+          devCode: PILOT_DEV_OTP,
+        },
+      };
+    }
     const result = await getStore().startCustomerSignup(phone);
     return {
       ok: true,
@@ -53,6 +72,26 @@ export async function customerSignupCompleteAction(input: {
   displayName?: string;
 }): Promise<CustomerAuthResult> {
   try {
+    if (isPilotDevOtpEnabled() && input.challengeId.startsWith("pilot.")) {
+      if (input.code !== PILOT_DEV_OTP) return { ok: false, error: "รหัส OTP ไม่ถูกต้อง" };
+      let phone: string;
+      try {
+        phone = Buffer.from(input.challengeId.slice(6), "base64url").toString("utf8");
+      } catch {
+        return { ok: false, error: "คำขอยืนยันเบอร์ไม่ถูกต้อง" };
+      }
+      const normalized = normalizePhone(phone);
+      if (!normalized) return { ok: false, error: "คำขอยืนยันเบอร์ไม่ถูกต้อง" };
+      const digest = createHash("sha256").update(`kubhai-pilot:${normalized}`).digest("hex");
+      const customerAccountId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+      await setCustomerSession({
+        customerAccountId,
+        phone: normalized,
+        phoneVerified: true,
+        displayName: input.displayName?.trim() || null,
+      });
+      return { ok: true, data: { customerAccountId } };
+    }
     const account = await getStore().completeCustomerSignup(input);
     await sessionFromAccount(account);
     return { ok: true, data: { customerAccountId: account.id } };
