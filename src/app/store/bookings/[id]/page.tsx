@@ -66,13 +66,13 @@ export default async function StoreBookingPage({
   // These operational datasets are still local-backed. Treat them as optional
   // while production booking persistence is being migrated, without using
   // method ReturnType expressions that fail TypeScript on the repository object.
-  let vehicles: BookingRecord["vehicle"][] = [];
-  let drivers: unknown[] = [];
-  let places: unknown[] = [];
-  let bookings: unknown[] = [];
+  let vehicles: any[] = [];
+  let drivers: any[] = [];
+  let places: any[] = [];
+  let bookings: any[] = [];
   try {
     const tenantBoard = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
-    vehicles = tenantBoard.vehicles as typeof vehicles;
+    vehicles = tenantBoard.vehicles;
     drivers = tenantBoard.drivers;
     places = tenantBoard.places;
     bookings = tenantBoard.bookings;
@@ -84,10 +84,10 @@ export default async function StoreBookingPage({
     record = {
       ...record,
       vehicle: record.booking.assignedVehicleId
-        ? tenantBoard.vehicles.find((item) => item.id === record!.booking.assignedVehicleId) ?? null
+        ? tenantBoard.vehicles.find((item) => item.id === record.booking.assignedVehicleId) ?? null
         : null,
       driver: record.booking.assignedDriverId
-        ? tenantBoard.drivers.find((item) => item.id === record!.booking.assignedDriverId) ?? null
+        ? tenantBoard.drivers.find((item) => item.id === record.booking.assignedDriverId) ?? null
         : null,
     };
   } catch {}
@@ -109,10 +109,10 @@ export default async function StoreBookingPage({
       tripPackageTitle={
         tripPackage ? localizedPackageText("th", tripPackage.title, "แพ็กเกจทริป") : null
       }
-      vehicles={vehicles as never}
-      drivers={drivers as never}
-      places={places as never}
-      bookings={bookings as never}
+      vehicles={vehicles}
+      drivers={drivers}
+      places={places}
+      bookings={bookings}
       accounts={accounts as never}
       initialProofId={proof}
       driverJob={driverJob}
