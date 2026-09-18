@@ -83,3 +83,35 @@ export async function getDurableStoreBookingById(
     ? record
     : null;
 }
+
+
+export async function assignDurableStoreBooking(
+  businessId: string,
+  bookingId: string,
+  input: { vehicleId: string; driverId: string },
+): Promise<boolean> {
+  const cfg = config();
+  const adminToken = STORE_READ_TOKENS[businessId];
+  if (!cfg || !adminToken || !isDurableBookingConfigured()) return false;
+  const response = await fetch(`${cfg.url}/rest/v1/rpc/assign_store_booking_request`, {
+    method: "POST",
+    headers: {
+      apikey: cfg.key,
+      Authorization: `Bearer ${cfg.key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      p_business_id: businessId,
+      p_booking_id: bookingId,
+      p_admin_token: adminToken,
+      p_vehicle_id: input.vehicleId,
+      p_driver_id: input.driverId,
+    }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    throw new Error(`Durable store booking assignment failed (${response.status}): ${detail}`);
+  }
+  return true;
+}
