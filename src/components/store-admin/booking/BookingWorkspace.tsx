@@ -422,10 +422,30 @@ export function BookingWorkspace({
                     <div>
                       <p className="text-xs text-muted">จุดรับ</p>
                       <p className="mt-1 font-medium text-navy-800">{booking.pickupLocation || "—"}</p>
+                      {booking.pickupLat != null && booking.pickupLng != null ? (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${booking.pickupLat},${booking.pickupLng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex text-xs font-semibold text-[color:var(--store-primary,#0F3D3E)] underline underline-offset-2"
+                        >
+                          ดูจุดรับบนแผนที่ ↗
+                        </a>
+                      ) : null}
                     </div>
                     <div>
                       <p className="text-xs text-muted">จุดส่ง</p>
                       <p className="mt-1 font-medium text-navy-800">{booking.dropoffLocation || "—"}</p>
+                      {booking.dropoffLat != null && booking.dropoffLng != null ? (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${booking.dropoffLat},${booking.dropoffLng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex text-xs font-semibold text-[color:var(--store-primary,#0F3D3E)] underline underline-offset-2"
+                        >
+                          ดูจุดส่งบนแผนที่ ↗
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                   <p className="mt-3 text-xs text-muted">
