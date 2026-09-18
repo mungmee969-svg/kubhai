@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { BookingWorkspace } from "@/components/store-admin/booking/BookingWorkspace";
 import { requireStoreContext } from "@/lib/auth/tenant";
 import { getDurableStoreBookingById } from "@/lib/data/supabase-store-booking";
-import type { BookingRecord } from "@/lib/data/repository";
+import type { BookingRecord, TenantBoard } from "@/lib/data/repository";
 import { localizedPackageText } from "@/lib/domain/trip-package";
 
 export const dynamic = "force-dynamic";
@@ -66,10 +66,10 @@ export default async function StoreBookingPage({
   // These operational datasets are still local-backed. Treat them as optional
   // while production booking persistence is being migrated, without using
   // method ReturnType expressions that fail TypeScript on the repository object.
-  let vehicles = [] as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>["vehicles"];
-  let drivers = [] as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>["drivers"];
-  let places = [] as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>["places"];
-  let bookings = [] as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>["bookings"];
+  let vehicles: TenantBoard["vehicles"] = [];
+  let drivers: TenantBoard["drivers"] = [];
+  let places: TenantBoard["places"] = [];
+  let bookings: TenantBoard["bookings"] = [];
   try {
     const tenantBoard = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
     vehicles = tenantBoard.vehicles;
