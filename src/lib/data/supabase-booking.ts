@@ -124,7 +124,7 @@ export async function getDurableBookingByToken(
     throw new Error("Supabase booking read RPC returned an invalid response");
   }
 
-  const input = raw.payload as BookingRequestInput;
+  const input = raw.payload as BookingRequestInput & {\n    assignedVehicleId?: string | null;\n    assignedDriverId?: string | null;\n  };
   const payloadClientRequestId = input.clientRequestId;
   const clientRequestId =
     typeof raw.clientRequestId === "string"
