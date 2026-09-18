@@ -66,10 +66,10 @@ export default async function StoreBookingPage({
   // These operational datasets are still local-backed. Treat them as optional
   // while production booking persistence is being migrated, without using
   // method ReturnType expressions that fail TypeScript on the repository object.
-  let vehicles: any[] = [];
-  let drivers: any[] = [];
-  let places: any[] = [];
-  let bookings: any[] = [];
+  let vehicles = [] as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>["vehicles"];
+  let drivers = [] as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>["drivers"];
+  let places = [] as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>["places"];
+  let bookings = [] as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>["bookings"];
   try {
     const tenantBoard = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
     vehicles = tenantBoard.vehicles;
