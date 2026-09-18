@@ -9,6 +9,7 @@ import {
   getStore,
 } from "@/lib/data";
 import { BOOKING_STATUSES, type BookingStatus } from "@/lib/domain/enums";
+import { assignDurableStoreBooking } from "@/lib/data/supabase-store-booking";
 import type {
   BookingFinancePlan,
   MoneyMovementInput,
@@ -69,7 +70,26 @@ export async function assignBookingAction(
 ): Promise<StoreActionResult> {
   try {
     const actor = await requireStoreActor();
-    await getStore().assignBooking(actor, bookingId, input);
+    if (actor.kind !== "user" || !input.vehicleId || !input.driverId) {
+      return { ok: false, error: "กรุณาเลือกรถและคนขับ" };
+    }
+    let durable = false;
+    for (const businessId of actor.businessIds) {
+      try {
+        if (await assignDurableStoreBooking(businessId, bookingId, {
+          vehicleId: input.vehicleId,
+          driverId: input.driverId,
+        })) {
+          durable = true;
+          break;
+        }
+      } catch {
+        // The booking may belong to another authorized tenant; keep checking.
+      }
+    }
+    if (!durable) {
+      await getStore().assignBooking(actor, bookingId, input);
+    }
     revalidatePath("/store");
     revalidatePath("/store/bookings");
     revalidatePath("/store/calendar");
