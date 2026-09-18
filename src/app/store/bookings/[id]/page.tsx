@@ -19,14 +19,21 @@ export default async function StoreBookingPage({
   const { id } = await params;
   const { proof } = await searchParams;
 
-  let record = await ctx.store.getBookingById(ctx.actor, id);
-  if (!record) {
+  // Production durable bookings must be resolved from Supabase first. The local
+  // repository is a development fallback and may throw on Vercel's read-only FS.
+  let record: BookingRecord | null = null;
+  try {
     const durable = await getDurableStoreBookingById(ctx.businessId, id);
     if (durable) {
-      const boardForVehicle = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
-      const preferredVehicle = durable.booking.preferredVehicleId
-        ? boardForVehicle.vehicles.find((item) => item.id === durable.booking.preferredVehicleId) ?? null
-        : null;
+      let preferredVehicle = null;
+      try {
+        const boardForVehicle = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
+        preferredVehicle = durable.booking.preferredVehicleId
+          ? boardForVehicle.vehicles.find((item) => item.id === durable.booking.preferredVehicleId) ?? null
+          : null;
+      } catch {
+        preferredVehicle = null;
+      }
       record = {
         booking: durable.booking,
         itinerary: durable.itinerary,
@@ -44,14 +51,30 @@ export default async function StoreBookingPage({
         tripCheckIns: [],
       } satisfies BookingRecord;
     }
+  } catch (error) {
+    console.error("[store-booking] durable detail read failed", { bookingId: id });
+  }
+  if (!record) {
+    try {
+      record = await ctx.store.getBookingById(ctx.actor, id);
+    } catch {
+      record = null;
+    }
   }
   if (!record || record.booking.businessId !== ctx.businessId) notFound();
 
-  const board = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
-  const accounts = await ctx.store.listPaymentAccounts(ctx.actor, ctx.businessId, {
-    includeInactive: true,
-  });
-  const driverJob = await ctx.store.listDriverJobForBooking(ctx.actor, id);
+  let board = { vehicles: [], drivers: [], places: [], bookings: [] } as Awaited<ReturnType<typeof ctx.store.loadTenantBoard>>;
+  try {
+    board = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
+  } catch {}
+  let accounts: Awaited<ReturnType<typeof ctx.store.listPaymentAccounts>> = [];
+  try {
+    accounts = await ctx.store.listPaymentAccounts(ctx.actor, ctx.businessId, { includeInactive: true });
+  } catch {}
+  let driverJob: Awaited<ReturnType<typeof ctx.store.listDriverJobForBooking>> = null;
+  try {
+    driverJob = await ctx.store.listDriverJobForBooking(ctx.actor, id);
+  } catch {}
   const tripPackage = record.booking.tripPackageId
     ? await ctx.store.getTripPackage(ctx.actor, record.booking.tripPackageId)
     : null;
