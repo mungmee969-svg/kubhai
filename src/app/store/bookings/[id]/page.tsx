@@ -76,6 +76,20 @@ export default async function StoreBookingPage({
     drivers = tenantBoard.drivers;
     places = tenantBoard.places;
     bookings = tenantBoard.bookings;
+
+    // The durable booking stores only assignment ids. Hydrate the actual
+    // vehicle/driver records from this tenant's board before rendering.
+    // Without this, the UI always receives vehicle:null and driver:null even
+    // after the assignment was persisted successfully.
+    record = {
+      ...record,
+      vehicle: record.booking.assignedVehicleId
+        ? tenantBoard.vehicles.find((item) => item.id === record!.booking.assignedVehicleId) ?? null
+        : null,
+      driver: record.booking.assignedDriverId
+        ? tenantBoard.drivers.find((item) => item.id === record!.booking.assignedDriverId) ?? null
+        : null,
+    };
   } catch {}
   let accounts: unknown[] = [];
   try {
