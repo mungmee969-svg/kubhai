@@ -236,7 +236,6 @@ export function BookingWizard({
       setError(errCustomer);
       return;
     }
-    // Pilot: guest booking — no customer account login required
     const source =
       sourceFromSearch(window.location.search) === "DIRECT"
         ? initialSource
