@@ -64,9 +64,12 @@ export default async function StoreBookingPage({
   }
   if (!record || record.booking.businessId !== ctx.businessId) notFound();
 
+  // Keep a non-null snapshot after the guard above. TypeScript does not preserve
+  // the narrowing of a mutable captured variable inside Array.find callbacks.
+  const resolvedRecord = record;
+
   // These operational datasets are still local-backed. Treat them as optional
-  // while production booking persistence is being migrated, without using
-  // method ReturnType expressions that fail TypeScript on the repository object.
+  // while production booking persistence is being migrated.
   let vehicles: Vehicle[] = [];
   let drivers: Driver[] = [];
   let places: Place[] = [];
@@ -80,15 +83,17 @@ export default async function StoreBookingPage({
 
     // The durable booking stores only assignment ids. Hydrate the actual
     // vehicle/driver records from this tenant's board before rendering.
-    // Without this, the UI always receives vehicle:null and driver:null even
-    // after the assignment was persisted successfully.
     record = {
-      ...record,
-      vehicle: record.booking.assignedVehicleId
-        ? tenantBoard.vehicles.find((item) => item.id === record.booking.assignedVehicleId) ?? null
+      ...resolvedRecord,
+      vehicle: resolvedRecord.booking.assignedVehicleId
+        ? tenantBoard.vehicles.find(
+            (item) => item.id === resolvedRecord.booking.assignedVehicleId,
+          ) ?? null
         : null,
-      driver: record.booking.assignedDriverId
-        ? tenantBoard.drivers.find((item) => item.id === record.booking.assignedDriverId) ?? null
+      driver: resolvedRecord.booking.assignedDriverId
+        ? tenantBoard.drivers.find(
+            (item) => item.id === resolvedRecord.booking.assignedDriverId,
+          ) ?? null
         : null,
     };
   } catch {}
