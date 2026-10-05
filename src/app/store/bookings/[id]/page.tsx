@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { BookingWorkspace } from "@/components/store-admin/booking/BookingWorkspace";
 import { requireStoreContext } from "@/lib/auth/tenant";
-import { getDurableStoreBookingById } from "@/lib/data/supabase-store-booking";
+import { getDurableStoreBookingById, getDurableStoreFleet } from "@/lib/data/supabase-store-booking";
 import type { BookingRecord } from "@/lib/data/repository";
 import type { Booking, Driver, Place, Vehicle } from "@/lib/domain/types";
 import { localizedPackageText } from "@/lib/domain/trip-package";
@@ -75,25 +75,27 @@ export default async function StoreBookingPage({
   let places: Place[] = [];
   let bookings: Booking[] = [];
   try {
-    const tenantBoard = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
-    vehicles = tenantBoard.vehicles;
-    drivers = tenantBoard.drivers;
-    places = tenantBoard.places;
-    bookings = tenantBoard.bookings;
+    const durableFleet = await getDurableStoreFleet(ctx.businessId);
+    let fleetVehicles: Vehicle[] = durableFleet?.vehicles ?? [];
+    let fleetDrivers: Driver[] = durableFleet?.drivers ?? [];
 
-    // The durable booking stores only assignment ids. Hydrate the actual
-    // vehicle/driver records from this tenant's board before rendering.
+    try {
+      const tenantBoard = await ctx.store.loadTenantBoard(ctx.actor, ctx.businessId);
+      if (!fleetVehicles.length) fleetVehicles = tenantBoard.vehicles;
+      if (!fleetDrivers.length) fleetDrivers = tenantBoard.drivers;
+      places = tenantBoard.places;
+      bookings = tenantBoard.bookings;
+    } catch {}
+
+    vehicles = fleetVehicles;
+    drivers = fleetDrivers;
     record = {
       ...resolvedRecord,
       vehicle: resolvedRecord.booking.assignedVehicleId
-        ? tenantBoard.vehicles.find(
-            (item) => item.id === resolvedRecord.booking.assignedVehicleId,
-          ) ?? null
+        ? fleetVehicles.find((item) => item.id === resolvedRecord.booking.assignedVehicleId) ?? null
         : null,
       driver: resolvedRecord.booking.assignedDriverId
-        ? tenantBoard.drivers.find(
-            (item) => item.id === resolvedRecord.booking.assignedDriverId,
-          ) ?? null
+        ? fleetDrivers.find((item) => item.id === resolvedRecord.booking.assignedDriverId) ?? null
         : null,
     };
   } catch {}
