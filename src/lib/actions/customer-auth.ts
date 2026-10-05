@@ -11,6 +11,7 @@ import {
 import { DomainError, TenantIsolationError, getStore } from "@/lib/data";
 import type { SocialProvider } from "@/lib/auth/oauth";
 import { isPhoneVerified, normalizePhone } from "@/lib/domain/customer-auth";
+import { claimDurableBooking, upsertDurablePilotCustomerAccount } from "@/lib/data/supabase-customer";
 
 export type CustomerAuthResult =
   | { ok: true; data?: Record<string, unknown> }
@@ -84,12 +85,12 @@ export async function customerSignupCompleteAction(input: {
       if (!normalized) return { ok: false, error: "คำขอยืนยันเบอร์ไม่ถูกต้อง" };
       const digest = createHash("sha256").update(`kubhai-pilot:${normalized}`).digest("hex");
       const customerAccountId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
-      await setCustomerSession({
-        customerAccountId,
+      const account = await upsertDurablePilotCustomerAccount({
+        id: customerAccountId,
         phone: normalized,
-        phoneVerified: true,
         displayName: input.displayName?.trim() || null,
       });
+      await sessionFromAccount(account);
       return { ok: true, data: { customerAccountId } };
     }
     const account = await getStore().completeCustomerSignup(input);
@@ -228,7 +229,11 @@ export async function claimBookingTokenAction(token: string): Promise<CustomerAu
     const session = await getCustomerSession();
     if (!session) return { ok: false, error: "กรุณาเข้าสู่ระบบ" };
     if (!session.phoneVerified) return { ok: false, error: "ยืนยันเบอร์โทรเพื่อเชื่อมการจอง" };
-    const booking = await getStore().claimBookingByToken(session.customerAccountId, token);
+    const booking = await claimDurableBooking({
+      token,
+      customerAccountId: session.customerAccountId,
+      phone: session.phone ?? "",
+    });
     revalidatePath("/account");
     revalidatePath(`/booking/${token}`);
     return { ok: true, data: { bookingId: booking.id } };
