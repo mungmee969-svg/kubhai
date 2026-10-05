@@ -18,6 +18,7 @@ import { CustomerPrefsControls } from "@/components/storefront/CustomerPrefsCont
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import { getStore } from "@/lib/data";
+import { claimDurableBooking } from "@/lib/data/supabase-customer";
 import {
   getDurableBookingByToken,
   isDurableBookingConfigured,
@@ -142,8 +143,11 @@ export default async function BookingPage({
     session?.phoneVerified &&
     !raw.booking.customerAccountId
   ) {
-    const claimed = await getStore()
-      .claimBookingByToken(session.customerAccountId, token)
+    const claimed = await claimDurableBooking({
+      token,
+      customerAccountId: session.customerAccountId,
+      phone: session.phone ?? "",
+    })
       .then(() => true)
       .catch(() => false);
     if (claimed) redirect(`/booking/${token}`);
